@@ -19,8 +19,11 @@ find_package(ZLIB)
 
 set(INCLUDE_DIR "./include")
 set(SRC_DIR "./src")
+set(3RDPARTY_DIR "./3rdparty")
+get_filename_component(INCLUDE_DIR "./include" ABSOLUTE)
 get_filename_component(SRC_DIR "./src" ABSOLUTE)
-set(VISIONARAY_DIR "${SRC_DIR}/3rdparty/visionaray")
+get_filename_component(3RDPARTY_DIR "./3rdparty" ABSOLUTE)
+set(VISIONARAY_DIR "${3RDPARTY_DIR}/visionaray")
 set(VISIONARAY_INCLUDE_DIR "${VISIONARAY_DIR}/include")
 set(VISIONARAY_COMMON_DIR "${VISIONARAY_DIR}/src/common")
 set(VISIONARAY_BUILD_DIR "${VISIONARAY_DIR}/build")
@@ -57,8 +60,8 @@ set(MATCH_SOURCES
 add_executable(match ${MATCH_SOURCES})
 target_link_libraries(
     match
-    "${VISIONARAY_BUILD_DIR}/src/common/libvisionaray_common.a"
-    "${VISIONARAY_BUILD_DIR}/src/visionaray/libvisionaray.a"
+    "${VISIONARAY_BUILD_DIR}/src/common/libvisionaray_common.so"
+    "${VISIONARAY_BUILD_DIR}/src/visionaray/libvisionaray.so"
     ${ZLIB_LIBRARIES}
     ${Boost_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
