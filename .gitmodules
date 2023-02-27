@@ -4,3 +4,4 @@
 [submodule "deskvox"]
 	path = 3rdparty/deskvox
     url = git@github.com:HellmannM/deskvox.git
+    branch = ct-rg-matcher
