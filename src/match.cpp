@@ -8,6 +8,9 @@
 
 #include <GL/glew.h>
 
+#include <Support/CmdLine.h>
+#include <Support/CmdLineUtil.h>
+
 #include <visionaray/detail/platform.h>
 
 #include <visionaray/math/math.h>
@@ -66,10 +69,19 @@ struct renderer : viewer_type
         : viewer_type(512, 512, "Visionaray Volume Rendering Example")
         , bbox({ -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f })
         , host_sched(8)
-//        , volume({{2, 2, 2}})
         , volume(texture_ref<float, 3>(2, 2, 2))
         , transfunc(4)
     {
+        // Add cmdline options
+        add_cmdline_option( support::cl::makeOption<std::string>(
+                    support::cl::Parser<>(),
+                    "filename",
+                    support::cl::Desc("Input file in mhd format"),
+                    support::cl::Positional,
+                    support::cl::Optional,
+                    support::cl::init(filename)
+                    ) );
+
         volume.reset(voldata);
         volume.set_filter_mode(Nearest);
         volume.set_address_mode(Clamp);
@@ -94,6 +106,8 @@ struct renderer : viewer_type
     // represenation
     texture_ref<float, 3>                       volume;
     texture_ref<vec4, 1>                        transfunc;
+
+    std::string                                 filename;
 
 protected:
 
