@@ -52,12 +52,14 @@ include_directories("${VISIONARAY_DIR}/src/3rdparty/tinyply/source")
 
 add_definitions(${PNG_DEFINITIONS})
 
+set(MATCH_HEADERS)
+
 set(MATCH_SOURCES
     ${SRC_DIR}/match.cpp
 )
 
+add_executable(match ${MATCH_HEADERS} ${MATCH_SOURCES})
 
-add_executable(match ${MATCH_SOURCES})
 target_link_libraries(
     match
     "${VISIONARAY_BUILD_DIR}/src/common/libvisionaray_common.so"
