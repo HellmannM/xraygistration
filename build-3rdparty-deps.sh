@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BUILD_VSNRAY=0
+BUILD_VSNRAY=1
 BUILD_DESKVOX=1
 
 NUM_CORES=24
@@ -20,6 +20,7 @@ if [ $BUILD_VSNRAY == "1" ]; then
         -DVSNRAY_ENABLE_PEDANTIC=OFF \
         -DVSNRAY_ENABLE_PTEX=OFF
     make -j$NUM_CORES
+    cp config/visionaray/config.h ../include/visionaray/config.h
     popd 
 fi
 
