@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BUILD_VSNRAY=1
+BUILD_VSNRAY=0
 BUILD_DESKVOX=1
 
 NUM_CORES=24
@@ -25,6 +25,7 @@ fi
 
 # 3rdparty/deskvox
 if [ $BUILD_DESKVOX == "1" ]; then
+    VISIONARAY_DIR="$PWD/3rdparty/visionaray"
     pushd 3rdparty/deskvox
     mkdir build
     cd build
@@ -32,8 +33,8 @@ if [ $BUILD_DESKVOX == "1" ]; then
         -DCMAKE_POLICY_DEFAULT_CMP0072=NEW \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_FLAGS="-march=native" \
-        -DVISIONARAY_INCLUDE_DIR=./3rdparty/visionaray/include \
-        -DVISIONARAY_LIBRARY=./3rdparty/visionaray/build/src/visionaray/libvisionaray.so
+        -DVISIONARAY_INCLUDE_DIR="$VISIONARAY_DIR/include" \
+        -DVISIONARAY_LIBRARY="$VISIONARAY_DIR/build/src/visionaray/libvisionaray.so"
     make -j$NUM_CORES
     popd 
 fi
