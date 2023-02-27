@@ -3,4 +3,4 @@
 	url = https://github.com/szellmann/visionaray.git
 [submodule "deskvox"]
 	path = 3rdparty/deskvox
-	url = https://github.com/deskvox/deskvox.git
+    url = git@github.com:HellmannM/deskvox.git
