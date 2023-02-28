@@ -1,6 +1,6 @@
 [submodule "visionaray"]
 	path = 3rdparty/visionaray
-	url = https://github.com/HellmannM/visionaray.git
+    url = git@github.com:HellmannM/visionaray.git
     branch = match
 [submodule "deskvox"]
 	path = 3rdparty/deskvox
