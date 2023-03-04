@@ -1,77 +1,76 @@
 project(ct-rg-matcher)
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1.3)
 
-if(POLICY CMP0072)
-    cmake_policy(SET CMP0072 OLD)
-endif()
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Boost COMPONENTS filesystem iostreams system thread REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(GLUT REQUIRED)
-find_package(OpenGL REQUIRED)
-find_package(Threads REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(JPEG)
-find_package(TIFF)
-find_package(PNG)
-find_package(ZLIB)
+#---------------------------------------------------------------------------------------------------
+# Directories containing dependencies
+#
 
-set(INCLUDE_DIR "./include")
-set(SRC_DIR "./src")
-set(3RDPARTY_DIR "./3rdparty")
-get_filename_component(INCLUDE_DIR "./include" ABSOLUTE)
-get_filename_component(SRC_DIR "./src" ABSOLUTE)
-get_filename_component(3RDPARTY_DIR "./3rdparty" ABSOLUTE)
+set(3RDPARTY_DIR "${PROJECT_SOURCE_DIR}/3rdparty")
 set(VISIONARAY_DIR "${3RDPARTY_DIR}/visionaray")
 set(VISIONARAY_INCLUDE_DIR "${VISIONARAY_DIR}/include")
 set(VISIONARAY_COMMON_DIR "${VISIONARAY_DIR}/src/common")
+set(VISIONARAY_SRC_DIR "${VISIONARAY_DIR}/src")
 set(VISIONARAY_BUILD_DIR "${VISIONARAY_DIR}/build")
+#set(__VSNRAY_LINK_LIBRARIES ${__VSNRAY_LINK_LIBRARIES} ${VISIONARAY_BUILD_DIR}/src/visionaray ${VISIONARAY_BUILD_DIR}/src/common)
 set(CMD_LINE_DIR "${VISIONARAY_DIR}/src/3rdparty/CmdLine")
 set(CMD_LINE_INCLUDE_DIR "${CMD_LINE_DIR}/include")
 set(IMGUI_DIR "${VISIONARAY_DIR}/src/3rdparty/imgui")
+set(DESKVOX_DIR "${3RDPARTY_DIR}/deskvox")
+set(DESKVOX_INCLUDE_DIR "${DESKVOX_DIR}/virvo")
+set(DESKVOX_BUILD_DIR "${DESKVOX_DIR}/build")
 
-# Hostprogram
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${GLEW_INCLUDE_DIR})
-include_directories(${GLUT_INCLUDE_DIRS})
-include_directories(${OPENGL_INCLUDE_DIR})
-include_directories(${JPEG_INCLUDE_DIR})
-include_directories(${TIFF_INCLUDE_DIR})
-include_directories(${PNG_INCLUDE_DIRS})
+#--------------------------------------------------------------------------------------------------
+# CMake modules
+#
 
-include_directories(${VISIONARAY_INCLUDE_DIR})
-include_directories(${VISIONARAY_COMMON_DIR})
-include_directories("${VISIONARAY_COMMON_DIR}/..")
-include_directories(${CMD_LINE_INCLUDE_DIR})
-include_directories(${IMGUI_DIR})
-include_directories(${INCLUDE_DIR})
-include_directories("${VISIONARAY_DIR}/src/3rdparty/tinyply/source")
-
-
-add_definitions(${PNG_DEFINITIONS})
-
-set(MATCH_HEADERS)
-
-set(MATCH_SOURCES
-    ${SRC_DIR}/match.cpp
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
+    ${VISIONARAY_DIR}/cmake
+    ${VISIONARAY_DIR}/cmake/modules
+    ${DESKVOX_DIR}/cmake
+    ${DESKVOX_DIR}/cmake/modules
 )
 
-add_executable(match ${MATCH_HEADERS} ${MATCH_SOURCES})
+include(VisionarayAddTarget)
+include(VisionarayUseFramework)
+include(VisionarayUsePackage)
 
-target_link_libraries(
-    match
-    "${VISIONARAY_BUILD_DIR}/src/common/libvisionaray_common.so"
-    "${VISIONARAY_BUILD_DIR}/src/visionaray/libvisionaray.so"
-    ${ZLIB_LIBRARIES}
-    ${Boost_LIBRARIES}
-    ${CMAKE_THREAD_LIBS_INIT}
-    ${GLEW_LIBRARY}
-    ${GLUT_LIBRARIES}
-    ${OPENGL_LIBRARIES}
-    ${JPEG_LIBRARIES}
-    ${TIFF_LIBRARIES}
-    ${PNG_LIBRARIES}
-)
+#--------------------------------------------------------------------------------------------------
+# CMake policies to control backward compatible behavior
+#
+
+# Old behavior: COMPILE_DEFINITIONS_<CONFIG>
+# New behavior: COMPILE_DEFINITIONS + generator expression
+if(POLICY CMP0043)
+    cmake_policy(SET CMP0043 NEW)
+endif()
+
+if(POLICY CMP0072)
+    cmake_policy(SET CMP0072 NEW)
+endif()
+
+#---------------------------------------------------------------------------------------------------
+# Directories containing config headers
+#
+
+# Config file location (#include <visionaray/config.h>,#include <common/config.h>,...)
+set(__VSNRAY_CONFIG_DIR "${PROJECT_SOURCE_DIR}/3rdparty/visionaray/build/config")
+
+# Config file location for the public visionaray library
+set(__VSNRAY_VISIONARAY_CONFIG_DIR "${__VSNRAY_CONFIG_DIR}/visionaray")
+
+# Config file location for the private visionaray_common library
+set(__VSNRAY_COMMON_CONFIG_DIR "${__VSNRAY_CONFIG_DIR}/common")
+
+
+#---------------------------------------------------------------------------------------------------
+# Options
+#
+option(VSNRAY_ENABLE_CUDA "Use CUDA, if available" ON)
+option(VSNRAY_ENABLE_TBB "Use TBB, if available" ON)
+
+add_subdirectory(src)
 
