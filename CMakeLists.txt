@@ -21,7 +21,7 @@ set(CMD_LINE_INCLUDE_DIR "${CMD_LINE_DIR}/include")
 set(IMGUI_DIR "${VISIONARAY_DIR}/src/3rdparty/imgui")
 set(DESKVOX_DIR "${3RDPARTY_DIR}/deskvox")
 set(DESKVOX_INCLUDE_DIR "${DESKVOX_DIR}/virvo")
-set(DESKVOX_BUILD_DIR "${DESKVOX_DIR}/build")
+set(DESKVOX_BIN_DIR "${DESKVOX_DIR}/build/Release/bin")
 
 #--------------------------------------------------------------------------------------------------
 # CMake modules

@@ -27,8 +27,8 @@ void render_cu(
 
     sched.frame([=] __device__ (R ray, int x, int y) -> result_record<S>
     {
-        bool debug = x==256 && y==256;
-        bool crosshair = x==256 || y==256;
+        bool debug = (x == 256) && (y == 256);
+        bool crosshair = (x == 256) || (y == 256);
 
         result_record<S> result;
 
@@ -48,7 +48,9 @@ void render_cu(
 
             // sample volume and do post-classification
             auto voxel = tex3D(volume, tex_coord);
-            C color = tex1D(transfunc, voxel);
+            //C color = tex1D(transfunc, voxel);
+            auto c = tex1D(transfunc, voxel);
+            C color = C(c);
 
             // premultiplied alpha
             color.xyz() *= color.w;
@@ -69,6 +71,9 @@ void render_cu(
             // step on
             t += 0.01f;
         }
+
+        if (debug) {printf("x");}
+        if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         result.hit = hit_rec.hit;
         return result;

@@ -25,8 +25,11 @@ void render_cpp(
     using S = R::scalar_type;
     using C = vector<4, S>;
 
-    sched.frame([&](R ray) -> result_record<S>
+    sched.frame([&](R ray, int x, int y) -> result_record<S>
     {
+        bool debug = (x == 256) && (y == 256);
+        bool crosshair = (x == 256) || (y == 256);
+
         result_record<S> result;
 
         auto hit_rec = intersect(ray, bbox);
@@ -66,6 +69,9 @@ void render_cpp(
             // step on
             t += 0.01f;
         }
+
+//        if (debug) {printf("x");}
+        if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         result.hit = hit_rec.hit;
         return result;

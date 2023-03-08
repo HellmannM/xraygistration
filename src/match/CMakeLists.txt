@@ -39,6 +39,9 @@ endif()
 
 visionaray_link_libraries(visionaray)
 visionaray_link_libraries(visionaray_common)
+visionaray_link_libraries(virvo_fileio)
+visionaray_link_libraries(virvo_transfunc)
+visionaray_link_libraries(virvo)
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${VISIONARAY_INCLUDE_DIR})
@@ -46,19 +49,17 @@ include_directories(${VISIONARAY_COMMON_DIR})
 include_directories(${VISIONARAY_SRC_DIR})
 include_directories(${__VSNRAY_CONFIG_DIR})
 include_directories(${CMD_LINE_INCLUDE_DIR})
+include_directories(${DESKVOX_INCLUDE_DIR})
 
 #--------------
 
 set(MATCH_HEADERS
-    fileio.h
     host_device_rt.h
-    nifti.h
     render.h
 )
 
 set(MATCH_SOURCES
     host_device_rt.cpp
-    nifti.cpp
     render.cpp
 )
 
@@ -78,36 +79,14 @@ endif()
 # Add match target
 #
 
-link_directories(${VISIONARAY_BUILD_DIR}/src/visionaray ${VISIONARAY_BUILD_DIR}/src/common)
+link_directories(
+    ${VISIONARAY_BUILD_DIR}/src/visionaray
+    ${VISIONARAY_BUILD_DIR}/src/common
+    ${DESKVOX_BIN_DIR}
+)
+
 visionaray_add_executable(match
     ${MATCH_HEADERS}
     ${MATCH_SOURCES}
     ${MATCH_CUDA_SOURCES}
 )
-
-# Hostprogram
-#include_directories(${Boost_INCLUDE_DIRS})
-#include_directories(${Boost_INCLUDE_DIRS})
-#include_directories(${GLEW_INCLUDE_DIR})
-#include_directories(${GLUT_INCLUDE_DIRS})
-#include_directories(${OPENGL_INCLUDE_DIR})
-#include_directories(${JPEG_INCLUDE_DIR})
-#include_directories(${TIFF_INCLUDE_DIR})
-#include_directories(${PNG_INCLUDE_DIRS})
-
-
-#target_link_libraries(
-#    match
-#    "${VISIONARAY_BUILD_DIR}/src/common/libvisionaray_common.so"
-#    "${VISIONARAY_BUILD_DIR}/src/visionaray/libvisionaray.so"
-#    ${ZLIB_LIBRARIES}
-#    ${Boost_LIBRARIES}
-#    ${CMAKE_THREAD_LIBS_INIT}
-#    ${GLEW_LIBRARY}
-#    ${GLUT_LIBRARIES}
-#    ${OPENGL_LIBRARIES}
-#    ${JPEG_LIBRARIES}
-#    ${TIFF_LIBRARIES}
-#    ${PNG_LIBRARIES}
-#)
-

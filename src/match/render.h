@@ -55,13 +55,17 @@ using ray_type_cpu              = basic_ray<scalar_type_cpu>;
 using ray_type_gpu              = basic_ray<scalar_type_gpu>;
 
 using camera_t = pinhole_camera;
-using volume_t = texture<float, 3>;
-using transfunc_t = texture<vec4, 1>;
-using volume_ref_t = texture_ref<float, 3>;
-using transfunc_ref_t = texture_ref<vec4, 1>;
+using volume_value_t = unorm<16>;
+//using volume_value_t = float;
+using volume_t = texture<volume_value_t, 3>;
+using transfunc_t = texture<vector<4, float>, 1>;
+using volume_ref_t = volume_t::ref_type;
+//using volume_ref_t = texture_ref<float, 3>;
+//using transfunc_ref_t = texture_ref<vec4, 1>;
+using transfunc_ref_t = transfunc_t::ref_type;
 #ifdef __CUDACC__
-using cuda_volume_t = cuda_texture<float, 3>;
-using cuda_transfunc_t = cuda_texture<vec4, 1>;
+using cuda_volume_t = cuda_texture<volume_value_t, 3>;
+using cuda_transfunc_t = cuda_texture<vector<4, float>, 1>;
 using cuda_volume_ref_t = cuda_volume_t::ref_type;
 using cuda_transfunc_ref_t = cuda_transfunc_t::ref_type;
 #endif

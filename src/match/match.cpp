@@ -11,7 +11,8 @@
 
 #include <GL/glew.h>
 
-#if VSNRAY_COMMON_HAVE_CUDA
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
 #include <cuda_runtime_api.h>
 #include <thrust/device_vector.h>
 #endif
@@ -19,6 +20,8 @@
 #include <Support/CmdLine.h>
 #include <Support/CmdLineUtil.h>
 
+// Visionaray includes
+#undef MATH_NAMESPACE
 #include <visionaray/detail/platform.h>
 #include <visionaray/math/math.h>
 #include <visionaray/texture/texture.h>
@@ -30,12 +33,16 @@
 #include <common/manip/zoom_manipulator.h>
 #include <common/viewer_glut.h>
 
-#include "fileio.h"
+// Deskvox includes
+#undef MATH_NAMESPACE
+#include <virvo/vvfileio.h>
+#include <virvo/vvpixelformat.h>
+#include <virvo/vvtextureutil.h>
+
 #include "host_device_rt.h"
 #include "render.h"
 
 using namespace visionaray;
-
 using viewer_type   = viewer_glut;
 
 
@@ -54,6 +61,17 @@ VSNRAY_ALIGN(32) static const float voldata[2 * 2 * 2] = {
         0.0f, 1.0f,
         1.0f, 0.0f
 
+        };
+// volume data
+VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
+//        65535,     0,
+//        0    , 65535,
+//        0    , 65535,
+//        65535,     0
+        1,     0,
+        0    , 1,
+        0    , 1,
+        1,     0
         };
 
 // post-classification transfer function
@@ -82,12 +100,14 @@ struct renderer : viewer_type
             host_device_rt::SRGB
             )
         , host_sched(8)
-#if VSNRAY_COMMON_HAVE_CUDA
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
         , device_sched(8, 8)
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
         , transfunc_ref(4)
         , filename()
+        , texture_format(virvo::PF_R16UI)
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -98,7 +118,8 @@ struct renderer : viewer_type
                     support::cl::init(filename)
                     ) );
 
-#if VSNRAY_COMMON_HAVE_CUDA
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
         add_cmdline_option( support::cl::makeOption<host_device_rt::mode_type&>({
                 { "cpu", host_device_rt::CPU, "Rendering on the CPU" },
                 { "gpu", host_device_rt::GPU, "Rendering on the GPU" },
@@ -110,19 +131,6 @@ struct renderer : viewer_type
             ) );
 #endif
 
-        volume_ref.reset(voldata);
-        volume_ref.set_filter_mode(Nearest);
-        volume_ref.set_address_mode(Clamp);
-
-        transfunc_ref.reset(tfdata);
-        transfunc_ref.set_filter_mode(Linear);
-        transfunc_ref.set_address_mode(Clamp);
-#if VSNRAY_COMMON_HAVE_CUDA
-        device_volume = cuda_volume_t(volume_ref);
-        device_volume_ref = cuda_volume_ref_t(device_volume);
-        device_transfunc = cuda_transfunc_t(transfunc_ref);
-        device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
-#endif
     }
 
     projection_mode                                     mode;
@@ -130,9 +138,12 @@ struct renderer : viewer_type
     pinhole_camera                                      cam;
     host_device_rt                                      rt;
     tiled_sched<ray_type_cpu>                           host_sched;
+    volume_t                                            volume;
     volume_ref_t                                        volume_ref;
+    transfunc_t                                         transfunc;
     transfunc_ref_t                                     transfunc_ref;
-#if VSNRAY_COMMON_HAVE_CUDA
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
     cuda_sched<ray_type_gpu>                            device_sched;
     cuda_volume_t                                       device_volume;
     cuda_volume_ref_t                                   device_volume_ref;
@@ -141,7 +152,9 @@ struct renderer : viewer_type
 #endif
 
     std::string                                         filename;
-    fileio*                                             filereader;
+    vvVolDesc*                                          vd;
+    // Internal storage format for textures
+    virvo::PixelFormat                                  texture_format;
 
     void load_volume();
 protected:
@@ -178,7 +191,8 @@ void renderer::on_display()
         rt.swap_buffers();
         rt.display_color_buffer();
     }
-#if VSNRAY_COMMON_HAVE_CUDA
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
     else if (rt.mode() == host_device_rt::GPU)
     {
         render_cu(
@@ -222,27 +236,73 @@ void renderer::on_resize(int w, int h)
 //
 void renderer::load_volume()
 {
-    if (filename != "")
+    if (filename == "")
     {
-        std::cout << "loading volume: " << filename << std::endl;
-        filereader = new nifti_fileio();
-        filereader->load(filename);
+        std::cerr << "No volume file provided. Using default volume." << std::endl;
+        volume_ref.reset(voldata_16ui);
+        volume_ref.set_filter_mode(Nearest);
+        volume_ref.set_address_mode(Clamp);
 
-        auto dims = filereader->get_voxel_dimensions();
-        std::array<unsigned int, 3> dims_array;
-        dims_array[0] = dims.x;
-        dims_array[1] = dims.y;
-        dims_array[2] = dims.z;
-        volume_ref = volume_ref_t(dims_array);
-        volume_ref.reset(reinterpret_cast<const float*>(filereader->get_data()));
         transfunc_ref.reset(tfdata);
-#if VSNRAY_COMMON_HAVE_CUDA
-        device_volume = cuda_volume_t(volume_ref);
+        transfunc_ref.set_filter_mode(Linear);
+        transfunc_ref.set_address_mode(Clamp);
+#ifdef __CUDACC__
         device_volume_ref = cuda_volume_ref_t(device_volume);
         device_transfunc = cuda_transfunc_t(transfunc_ref);
         device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
+        return;
     }
+
+    std::cout << "Loading volume file: " << filename << std::endl;
+    vd = new vvVolDesc(filename.c_str());
+    vvFileIO fio;
+    if (fio.loadVolumeData(vd) != vvFileIO::OK)
+    {
+        std::cerr << "Error loading volume" << std::endl;
+        delete vd;
+        vd = NULL;
+        return;
+    }
+    else vd->printInfoLine();
+    // Set default color scheme if no TF present:
+    if (vd->tf[0].isEmpty())
+    {
+      vd->tf[0].setDefaultAlpha(0, 0.0, 1.0);
+      vd->tf[0].setDefaultColors((vd->getChan()==1) ? 0 : 2, 0.0, 1.0);
+    }
+    virvo::TextureUtil tu(vd);
+    assert(vd->getChan() == 1); // only support single channel data
+    virvo::TextureUtil::Pointer tex_data = nullptr;
+    virvo::TextureUtil::Channels channelbits = 1ULL;
+    tex_data = tu.getTexture(virvo::vec3i(0),
+            virvo::vec3i(vd->vox),
+            texture_format,
+            channelbits,
+            0 /*frame*/ );
+    // update vol
+    volume = volume_t(vd->vox[0], vd->vox[1], vd->vox[2]);
+    volume.reset(reinterpret_cast<volume_ref_t::value_type const*>(tex_data));
+    volume_ref = volume_ref_t(volume);
+    volume_ref.set_address_mode(Clamp);
+    volume_ref.set_filter_mode(Nearest);
+    // update tf
+    aligned_vector<vec4> tf(256 * 1 * 1);
+    vd->computeTFTexture(0, 256, 1, 1, reinterpret_cast<float*>(tf.data()));
+    transfunc = transfunc_t(tf.size());
+    transfunc.reset(tf.data());
+    transfunc_ref = transfunc_ref_t(transfunc);
+    transfunc_ref.set_address_mode(Clamp);
+    transfunc_ref.set_filter_mode(Nearest);
+//#if VSNRAY_COMMON_HAVE_CUDA
+#ifdef __CUDACC__
+    device_volume = cuda_volume_t(volume_ref);
+    device_volume_ref = cuda_volume_ref_t(device_volume);
+    device_transfunc = cuda_transfunc_t(transfunc_ref);
+    device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
+#endif
+
+    //TODO update bbox
 }
 
 //-------------------------------------------------------------------------------------------------
