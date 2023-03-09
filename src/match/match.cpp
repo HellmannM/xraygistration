@@ -91,7 +91,7 @@ struct renderer : viewer_type
 {
     renderer()
         : viewer_type(512, 512, "Visionaray Volume Rendering Example")
-        , mode(projection_mode::AlphaCompositing)
+        , algo(projection_algo::AlphaCompositing)
         , bbox({ -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f })
         , rt(
             host_device_rt::CPU,
@@ -108,6 +108,7 @@ struct renderer : viewer_type
         , transfunc_ref(4)
         , filename()
         , texture_format(virvo::PF_R16UI)
+        , delta(0.01f)
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -117,6 +118,18 @@ struct renderer : viewer_type
                     support::cl::Positional,
                     support::cl::init(filename)
                     ) );
+
+        add_cmdline_option( support::cl::makeOption<projection_algo&>({
+                { "alpha", projection_algo::AlphaCompositing, "Aphla compositing" },
+                { "max", projection_algo::MaxIntensity, "Maximum intensity" },
+                { "min", projection_algo::MinIntensity, "Minimum intensity" },
+                { "drr", projection_algo::DRR, "DRR" },
+            },
+            "algo",
+            support::cl::Desc("Projection algorithm"),
+            support::cl::ArgRequired,
+            support::cl::init(algo)
+            ) );
 
 //#if VSNRAY_COMMON_HAVE_CUDA
 #ifdef __CUDACC__
@@ -133,7 +146,7 @@ struct renderer : viewer_type
 
     }
 
-    projection_mode                                     mode;
+    projection_algo                                     algo;
     aabb                                                bbox;
     pinhole_camera                                      cam;
     host_device_rt                                      rt;
@@ -155,12 +168,14 @@ struct renderer : viewer_type
     vvVolDesc*                                          vd;
     // Internal storage format for textures
     virvo::PixelFormat                                  texture_format;
+    float                                               delta;
 
     void load_volume();
 protected:
 
     void on_display();
     void on_resize(int w, int h);
+    void on_key_press(visionaray::key_event const& event);
 
 };
 
@@ -180,16 +195,9 @@ void renderer::on_display()
                 rt,
                 host_sched,
                 cam,
-                mode
+                algo,
+                delta
             );
-
-        // display the rendered image
-        auto bgcolor = background_color();
-        glClearColor(bgcolor.x, bgcolor.y, bgcolor.z, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        rt.swap_buffers();
-        rt.display_color_buffer();
     }
 //#if VSNRAY_COMMON_HAVE_CUDA
 #ifdef __CUDACC__
@@ -202,25 +210,25 @@ void renderer::on_display()
                 rt,
                 device_sched,
                 cam,
-                mode
+                algo,
+                delta
             );
-
-        // display the rendered image
-        auto bgcolor = background_color();
-        glClearColor(bgcolor.x, bgcolor.y, bgcolor.z, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        rt.swap_buffers();
-        rt.display_color_buffer();
     }
 #endif
+
+    // display the rendered image
+    auto bgcolor = background_color();
+    glClearColor(bgcolor.x, bgcolor.y, bgcolor.z, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    rt.swap_buffers();
+    rt.display_color_buffer();
 }
 
 
 //-------------------------------------------------------------------------------------------------
 // resize event
 //
-
 void renderer::on_resize(int w, int h)
 {
     cam.set_viewport(0, 0, w, h);
@@ -229,6 +237,64 @@ void renderer::on_resize(int w, int h)
     rt.resize(w, h);
 
     viewer_type::on_resize(w, h);
+}
+
+//-------------------------------------------------------------------------------------------------
+// key event
+//
+void renderer::on_key_press(key_event const& event)
+{
+    switch (event.key())
+    {
+    case '1':
+        std::cout << "Switching algorithm: Alpha compositing\n";
+        algo = projection_algo::AlphaCompositing;
+        break;
+
+    case '2':
+        std::cout << "Switching algorithm: Maximum intensity projection\n";
+        algo = projection_algo::MaxIntensity;
+        break;
+
+    case '3':
+        std::cout << "Switching algorithm: Minimum intensity projection\n";
+        algo = projection_algo::MinIntensity;
+        break;
+
+    case '4':
+        std::cout << "Switching algorithm: DRR\n";
+        algo = projection_algo::DRR;
+        break;
+
+    case 'c':
+        if (rt.color_space() == host_device_rt::RGB)
+        {
+            rt.color_space() = host_device_rt::SRGB;
+        }
+        else
+        {
+            rt.color_space() = host_device_rt::RGB;
+        }
+        break;
+
+   case 'm':
+#if VSNRAY_COMMON_HAVE_CUDA
+        if (rt.mode() == host_device_rt::CPU)
+        {
+            rt.mode() = host_device_rt::GPU;
+        }
+        else
+        {
+            rt.mode() = host_device_rt::CPU;
+        }
+#endif
+        break;
+
+    default:
+        break;
+    }
+
+    viewer_type::on_key_press(event);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -302,7 +368,7 @@ void renderer::load_volume()
     device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
 
-    //TODO update bbox
+    bbox = aabb(vec3(vd->getBoundingBox().min.data()), vec3(vd->getBoundingBox().max.data()));
 }
 
 //-------------------------------------------------------------------------------------------------

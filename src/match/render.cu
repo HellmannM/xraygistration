@@ -13,7 +13,8 @@ void render_cu(
         host_device_rt&                 rt,
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
-        projection_mode                 mode
+        projection_algo                 algo,
+        float                           delta
         )
 {
     auto sparams = make_sched_params(

@@ -40,9 +40,11 @@ namespace visionaray
 // Helper types
 //
 
-enum projection_mode
+enum projection_algo
 {
     AlphaCompositing,
+    MaxIntensity,
+    MinIntensity,
     DRR
 };
 
@@ -83,7 +85,8 @@ void render_cpp(
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
-        projection_mode                 mode
+        projection_algo                 algo,
+        float                           delta
         );
 
 #ifdef __CUDACC__
@@ -94,7 +97,8 @@ void render_cu(
         host_device_rt&                 rt,
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
-        projection_mode                 mode
+        projection_algo                 algo,
+        float                           delta
         );
 #endif
 
