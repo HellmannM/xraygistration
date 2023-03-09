@@ -46,8 +46,8 @@ enum projection_mode
     DRR
 };
 
-//using scalar_type_cpu           = float;
-using scalar_type_cpu           = simd::float4;
+using scalar_type_cpu           = float;
+//using scalar_type_cpu           = simd::float4;
 //using scalar_type_cpu           = simd::float8;
 //using scalar_type_cpu           = simd::float16;
 using scalar_type_gpu           = float;
@@ -60,8 +60,6 @@ using volume_value_t = unorm<16>;
 using volume_t = texture<volume_value_t, 3>;
 using transfunc_t = texture<vector<4, float>, 1>;
 using volume_ref_t = volume_t::ref_type;
-//using volume_ref_t = texture_ref<float, 3>;
-//using transfunc_ref_t = texture_ref<vec4, 1>;
 using transfunc_ref_t = transfunc_t::ref_type;
 #ifdef __CUDACC__
 using cuda_volume_t = cuda_texture<volume_value_t, 3>;
