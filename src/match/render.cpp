@@ -28,10 +28,11 @@ void render_cpp(
 
     sched.frame([&](R ray, int x, int y) -> result_record<S>
     {
-        bool debug = (x == 256) && (y == 256);
-        bool crosshair = (x == 256) || (y == 256);
-
         result_record<S> result;
+
+        //bool debug = (x == 256) && (y == 256);
+        //bool crosshair = (x == 256) || (y == 256);
+        //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         auto hit_rec = intersect(ray, bbox);
         auto t = hit_rec.tnear;
@@ -97,9 +98,6 @@ void render_cpp(
             // step on
             t += delta;
         }
-
-//        if (debug) {printf("x");}
-        if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         result.hit = hit_rec.hit;
         return result;

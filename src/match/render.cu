@@ -28,10 +28,11 @@ void render_cu(
 
     sched.frame([=] __device__ (R ray, int x, int y) -> result_record<S>
     {
-        bool debug = (x == 256) && (y == 256);
-        bool crosshair = (x == 256) || (y == 256);
-
         result_record<S> result;
+
+        //bool debug = (x == 256) && (y == 256);
+        //bool crosshair = (x == 256) || (y == 256);
+        //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         auto hit_rec = intersect(ray, bbox);
         auto t = hit_rec.tnear;
@@ -56,25 +57,49 @@ void render_cu(
             // premultiplied alpha
             color.xyz() *= color.w;
 
-            // front-to-back alpha compositing
-            result.color += select(
-                    t < hit_rec.tfar,
-                    color * (1.0f - result.color.w),
-                    C(0.0)
-                    );
-
-            // early-ray termination - don't traverse w/o a contribution
-            if ( all(result.color.w >= 0.999f) )
+            // compositing
+            if (algo == projection_algo::AlphaCompositing)
             {
-                break;
+                result.color += select(
+                        t < hit_rec.tfar,
+                        color * (1.0f - result.color.w),
+                        C(0.0)
+                        );
+
+                // early-ray termination - don't traverse w/o a contribution
+                if ( all(result.color.w >= 0.999f) )
+                {
+                    break;
+                }
+            }
+            else if (algo == projection_algo::MaxIntensity)
+            {
+                result.color = select(
+                        t < hit_rec.tfar,
+                        max(color, result.color),
+                        result.color
+                        );
+            }
+            else if (algo == projection_algo::MinIntensity)
+            {
+                result.color = select(
+                        t < hit_rec.tfar,
+                        min(color, result.color),
+                        result.color
+                        );
+            }
+            else if (algo == projection_algo::DRR)
+            {
+                result.color += select(
+                        t < hit_rec.tfar,
+                        color,
+                        C(0.0)
+                        );
             }
 
             // step on
-            t += 0.01f;
+            t += delta;
         }
-
-        if (debug) {printf("x");}
-        if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         result.hit = hit_rec.hit;
         return result;
