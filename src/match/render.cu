@@ -30,9 +30,11 @@ void render_cu(
     {
         result_record<S> result;
 
+        bool debug = (x == 280) && (y == 200);
         //bool debug = (x == 256) && (y == 256);
-        //bool crosshair = (x == 256) || (y == 256);
-        //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
+        bool crosshair = (x == 256) || (y == 256);
+        //if (debug) printf(".");
+        if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         auto hit_rec = intersect(ray, bbox);
         auto t = hit_rec.tnear;
@@ -50,9 +52,7 @@ void render_cu(
 
             // sample volume and do post-classification
             auto voxel = tex3D(volume, tex_coord);
-            //C color = tex1D(transfunc, voxel);
-            auto c = tex1D(transfunc, voxel);
-            C color = C(c);
+            C color = tex1D(transfunc, voxel);
 
             // premultiplied alpha
             color.xyz() *= color.w;

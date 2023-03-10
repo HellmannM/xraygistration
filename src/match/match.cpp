@@ -11,8 +11,8 @@
 
 #include <GL/glew.h>
 
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
 #include <cuda_runtime_api.h>
 #include <thrust/device_vector.h>
 #endif
@@ -64,14 +64,10 @@ VSNRAY_ALIGN(32) static const float voldata[2 * 2 * 2] = {
         };
 // volume data
 VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
-//        65535,     0,
-//        0    , 65535,
-//        0    , 65535,
-//        65535,     0
-        1,     0,
-        0    , 1,
-        0    , 1,
-        1,     0
+        1,         0,
+        0    , 65535,
+        0    , 65535,
+        65535,     0
         };
 
 // post-classification transfer function
@@ -100,8 +96,8 @@ struct renderer : viewer_type
             host_device_rt::SRGB
             )
         , host_sched(8)
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
         , device_sched(8, 8)
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
@@ -132,8 +128,8 @@ struct renderer : viewer_type
             support::cl::init(algo)
             ) );
 
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
         add_cmdline_option( support::cl::makeOption<host_device_rt::mode_type&>({
                 { "cpu", host_device_rt::CPU, "Rendering on the CPU" },
                 { "gpu", host_device_rt::GPU, "Rendering on the GPU" },
@@ -156,8 +152,8 @@ struct renderer : viewer_type
     volume_ref_t                                        volume_ref;
     transfunc_t                                         transfunc;
     transfunc_ref_t                                     transfunc_ref;
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
     cuda_sched<ray_type_gpu>                            device_sched;
     cuda_volume_t                                       device_volume;
     cuda_volume_ref_t                                   device_volume_ref;
@@ -201,8 +197,8 @@ void renderer::on_display()
                 delta
             );
     }
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
     else if (rt.mode() == host_device_rt::GPU)
     {
         render_cu(
@@ -282,10 +278,12 @@ void renderer::on_key_press(key_event const& event)
 #if VSNRAY_COMMON_HAVE_CUDA
         if (rt.mode() == host_device_rt::CPU)
         {
+            std::cout << "Switching to GPU.\n";
             rt.mode() = host_device_rt::GPU;
         }
         else
         {
+            std::cout << "Switching to CPU.\n";
             rt.mode() = host_device_rt::CPU;
         }
 #endif
@@ -313,9 +311,11 @@ void renderer::load_volume()
         transfunc_ref.reset(tfdata);
         transfunc_ref.set_filter_mode(Linear);
         transfunc_ref.set_address_mode(Clamp);
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if VSNRAY_COMMON_HAVE_CUDA
+        std::cout << "Copying volume and transfer function to gpu.\n";
         device_volume_ref = cuda_volume_ref_t(device_volume);
-        device_transfunc = cuda_transfunc_t(transfunc_ref);
+        device_transfunc = cuda_transfunc_t(transfunc);
         device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
         return;
@@ -360,16 +360,45 @@ void renderer::load_volume()
     transfunc.reset(tf.data());
     transfunc_ref = transfunc_ref_t(transfunc);
     transfunc_ref.set_address_mode(Clamp);
-    transfunc_ref.set_filter_mode(Nearest);
-//#if VSNRAY_COMMON_HAVE_CUDA
-#ifdef __CUDACC__
+    transfunc_ref.set_filter_mode(Linear);
+#if VSNRAY_COMMON_HAVE_CUDA
+//#ifdef __CUDACC__
+    std::cout << "Copying volume and transfer function to gpu.\n";
     device_volume = cuda_volume_t(volume_ref);
     device_volume_ref = cuda_volume_ref_t(device_volume);
     device_transfunc = cuda_transfunc_t(transfunc_ref);
     device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
+    
+    //if (1)
+    //{
+    //    std::cout << "Using TF:\n";
+    //    for (int i=0; i<4; ++i)
+    //    {
+    //        for (int j=0; j<4; ++j)
+    //        {
+    //            std::cout << tf[i][j] << ", ";
+    //        }
+    //        std::cout << "\n";
+    //    }
+    //}
 
     bbox = aabb(vec3(vd->getBoundingBox().min.data()), vec3(vd->getBoundingBox().max.data()));
+
+    // determine ray integration step size (aka delta)
+    int axis = 0;
+    if (vd->getSize()[1] / vd->vox[1] < vd->getSize()[axis] / vd->vox[axis])
+    {
+        axis = 1;
+    }
+    if (vd->getSize()[2] / vd->vox[2] < vd->getSize()[axis] / vd->vox[axis])
+    {
+        axis = 2;
+    }
+
+    //TODO expose quality variable
+    int quality = 2.f;
+    delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
 }
 
 //-------------------------------------------------------------------------------------------------
