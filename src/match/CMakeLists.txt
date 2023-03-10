@@ -64,7 +64,7 @@ set(MATCH_SOURCES
 )
 
 if(CUDA_FOUND AND VSNRAY_ENABLE_CUDA)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "--expt-extended-lambda")
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "--extended-lambda --expt-extended-lambda")
     visionaray_cuda_compile(MATCH_CUDA_SOURCES
         render.cu
         match.cu
