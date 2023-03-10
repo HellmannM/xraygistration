@@ -109,6 +109,7 @@ struct renderer : viewer_type
         , filename()
         , texture_format(virvo::PF_R16UI)
         , delta(0.01f)
+        , bgcolor({1.f, 1.f, 1.f})
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -169,6 +170,7 @@ struct renderer : viewer_type
     // Internal storage format for textures
     virvo::PixelFormat                                  texture_format;
     float                                               delta;
+    vec3                                                bgcolor;
 
     void load_volume();
 protected:
@@ -217,7 +219,6 @@ void renderer::on_display()
 #endif
 
     // display the rendered image
-    auto bgcolor = background_color();
     glClearColor(bgcolor.x, bgcolor.y, bgcolor.z, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
