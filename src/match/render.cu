@@ -30,10 +30,8 @@ void render_cu(
     {
         result_record<S> result;
 
-        bool debug = (x == 280) && (y == 200);
         //bool debug = (x == 256) && (y == 256);
         bool crosshair = (x == 256) || (y == 256);
-        //if (debug) printf(".");
         if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         auto hit_rec = intersect(ray, bbox);
