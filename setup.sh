@@ -6,7 +6,7 @@ pushd "${SCRIPT_DIR}"
 BUILD_VSNRAY=1
 BUILD_DESKVOX=1
 
-NUM_CORES=24
+NUM_CORES=16
 
 # 3rdparty/visionaray
 if [ $BUILD_VSNRAY == "1" ]; then
@@ -19,7 +19,8 @@ if [ $BUILD_VSNRAY == "1" ]; then
         -DBUILD_SHARED_LIBS=ON \
         -DCMAKE_CXX_FLAGS="-march=native" \
         -DVSNRAY_ENABLE_PBRT_PARSER=OFF \
-        -DVSNRA_ENABLE_EXAMPLES=OFF \
+        -DVSNRAY_ENABLE_EXAMPLES=OFF \
+        -DVSNRAY_ENABLE_VIEWER=OFF \
         -DVSNRAY_ENABLE_PEDANTIC=OFF \
         -DVSNRAY_ENABLE_PTEX=OFF
     make -j$NUM_CORES
