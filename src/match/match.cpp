@@ -299,11 +299,43 @@ void renderer::on_key_press(key_event const& event)
 //-------------------------------------------------------------------------------------------------
 // load volume if file
 //
+void test_volume(volume_ref_t volume)
+{
+    for (int z=0; z<2; ++z)
+    {
+        for (int y=0; y<2; ++y)
+        {
+            for (int x=0; x<2; ++x)
+            {
+                vec3 tc = {x, y, z};
+                auto voxelval = tex3D(volume, tc);
+                printf("{%f, %f, %f} = %f\n", tc.x, tc.y, tc.z, voxelval);
+            }
+        }
+    }
+}
+void __global__ test_volume_cu(cuda_volume_ref_t volume)
+{
+    for (int z=0; z<2; ++z)
+    {
+        for (int y=0; y<2; ++y)
+        {
+            for (int x=0; x<2; ++x)
+            {
+                vec3 tc = {x, y, z};
+                auto voxelval = tex3D(volume, tc);
+                printf("{%f, %f, %f} = %f\n", tc.x, tc.y, tc.z, voxelval);
+            }
+        }
+    }
+}
 void renderer::load_volume()
 {
     if (filename == "")
     {
         std::cerr << "No volume file provided. Using default volume." << std::endl;
+        volume = volume_t(2, 2, 2);
+        volume.reset(voldata_16ui);
         volume_ref.reset(voldata_16ui);
         volume_ref.set_filter_mode(Nearest);
         volume_ref.set_address_mode(Clamp);
@@ -311,12 +343,15 @@ void renderer::load_volume()
         transfunc_ref.reset(tfdata);
         transfunc_ref.set_filter_mode(Linear);
         transfunc_ref.set_address_mode(Clamp);
+        test_volume(volume_ref);
 //#ifdef __CUDACC__
 #if VSNRAY_COMMON_HAVE_CUDA
         std::cout << "Copying volume and transfer function to gpu.\n";
+        device_volume = cuda_volume_t(volume_ref);
         device_volume_ref = cuda_volume_ref_t(device_volume);
         device_transfunc = cuda_transfunc_t(transfunc);
         device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
+        test_volume_cu<<<1, dim3(1,1)>>>(device_volume_ref);
 #endif
         return;
     }
