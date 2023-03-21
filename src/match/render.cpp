@@ -10,6 +10,7 @@ void render_cpp(
         volume_ref_t const&             volume,
         transfunc_ref_t const&          transfunc,
         aabb                            bbox,
+        vec2f                           value_range,
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
@@ -21,6 +22,8 @@ void render_cpp(
             cam,
             rt
             );
+
+    auto range = value_range.y - value_range.x;
 
     using R = ray_type_cpu;
     using S = R::scalar_type;
@@ -50,7 +53,10 @@ void render_cpp(
 
             // sample volume and do post-classification
             auto voxel = tex3D(volume, tex_coord);
-            C color = tex1D(transfunc, voxel);
+            //C color = tex1D(transfunc, voxel);
+            float voxel_norm = ((float)voxel - value_range.x) / range;
+            float remapped_voxel = voxel_norm * (1.f - 1.f/transfunc.width()) + (0.5f / transfunc.width());
+            C color = tex1D(transfunc, remapped_voxel);
 
             // premultiplied alpha
             color.xyz() *= color.w;

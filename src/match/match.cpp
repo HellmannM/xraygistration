@@ -51,33 +51,23 @@ using viewer_type   = viewer_glut;
 //
 
 // volume data
-VSNRAY_ALIGN(32) static const float voldata[2 * 2 * 2] = {
-
-        // slice 1
-        1.0f, 0.0f,
-        0.0f, 1.0f,
-
-        // slice 2
-        0.0f, 1.0f,
-        1.0f, 0.0f
-
-        };
-// volume data
 VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
-        1,         0,
-        0    , 65535,
-        0    , 65535,
-        65535,     0
+         0.1, 0.0,
+         0.0, 0.2,
+         0.0, 0.5,
+         1.0, 0.0
         };
 
 // post-classification transfer function
-VSNRAY_ALIGN(32) static const vec4 tfdata[4 * 4] = {
-        { 0.0f, 0.0f, 0.0f, 0.02f },
-        { 0.7f, 0.1f, 0.2f, 0.03f },
-        { 0.1f, 0.9f, 0.3f, 0.04f },
-        { 1.0f, 1.0f, 1.0f, 0.05f }
+#define TFSIZE 2
+VSNRAY_ALIGN(32) static const vec4 tfdata[TFSIZE] = {
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 1.0f, 1.0f, 1.0f, 1.0f }
+//        { 0.0f, 0.0f, 0.0f, 0.02f },
+//        { 0.7f, 0.1f, 0.2f, 0.03f },
+//        { 0.1f, 0.9f, 0.3f, 0.04f },
+//        { 1.0f, 1.0f, 1.0f, 0.05f }
         };
-
 
 //-------------------------------------------------------------------------------------------------
 // struct with state variables
@@ -167,6 +157,7 @@ struct renderer : viewer_type
     virvo::PixelFormat                                  texture_format;
     float                                               delta;
     vec3                                                bgcolor;
+    vec2f                                               value_range;
 
     void load_volume();
 protected:
@@ -190,6 +181,7 @@ void renderer::on_display()
                 volume_ref,
                 transfunc_ref,
                 bbox,
+                value_range,
                 rt,
                 host_sched,
                 cam,
@@ -205,6 +197,7 @@ void renderer::on_display()
                 device_volume_ref,
                 device_transfunc_ref,
                 bbox,
+                value_range,
                 rt,
                 device_sched,
                 cam,
@@ -312,9 +305,13 @@ void renderer::load_volume()
         volume_ref.set_filter_mode(Nearest);
         volume_ref.set_address_mode(Clamp);
 
+        transfunc_ref = transfunc_ref_t(TFSIZE);
         transfunc_ref.reset(tfdata);
         transfunc_ref.set_filter_mode(Linear);
         transfunc_ref.set_address_mode(Clamp);
+
+        value_range = vec2f(0.0, 1.0);
+
 //#ifdef __CUDACC__
 #if VSNRAY_COMMON_HAVE_CUDA
         std::cout << "Copying volume and transfer function to gpu.\n";
@@ -409,10 +406,11 @@ void renderer::load_volume()
     {
         axis = 2;
     }
-
     //TODO expose quality variable
-    int quality = 2.f;
+    int quality = 1.f;
     delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
+
+    value_range = vec2f(vd->range(0).x, vd->range(0).y);
 }
 
 //-------------------------------------------------------------------------------------------------
