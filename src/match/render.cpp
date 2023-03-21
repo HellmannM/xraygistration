@@ -14,7 +14,6 @@ void render_cpp(
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
-        projection_algo                 algo,
         float                           delta
         )
 {
@@ -61,45 +60,11 @@ void render_cpp(
             // premultiplied alpha
             color.xyz() *= color.w;
 
-            // compositing
-            if (algo == projection_algo::AlphaCompositing)
-            {
-                result.color += select(
-                        t < hit_rec.tfar,
-                        color * (1.0f - result.color.w),
-                        C(0.0)
-                        );
-
-                // early-ray termination - don't traverse w/o a contribution
-                if ( all(result.color.w >= 0.999f) )
-                {
-                    break;
-                }
-            }
-            else if (algo == projection_algo::MaxIntensity)
-            {
-                result.color = select(
-                        t < hit_rec.tfar,
-                        max(color, result.color),
-                        result.color
-                        );
-            }
-            else if (algo == projection_algo::MinIntensity)
-            {
-                result.color = select(
-                        t < hit_rec.tfar,
-                        min(color, result.color),
-                        result.color
-                        );
-            }
-            else if (algo == projection_algo::DRR)
-            {
-                result.color += select(
-                        t < hit_rec.tfar,
-                        color,
-                        C(0.0)
-                        );
-            }
+            result.color += select(
+                    t < hit_rec.tfar,
+                    color,
+                    C(0.0)
+                    );
 
             // step on
             t += delta;

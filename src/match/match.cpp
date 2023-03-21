@@ -12,7 +12,6 @@
 #include <GL/glew.h>
 
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
 #include <cuda_runtime_api.h>
 #include <thrust/device_vector.h>
 #endif
@@ -51,22 +50,19 @@ using viewer_type   = viewer_glut;
 //
 
 // volume data
-VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
-         0.1, 0.0,
-         0.0, 0.2,
-         0.0, 0.5,
-         1.0, 0.0
+//VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
+VSNRAY_ALIGN(32) static const int16_t voldata_16ui[2 * 2 * 2] = {
+         1, 0,
+         0, 3,
+         0, 5,
+        10, 0
         };
 
 // post-classification transfer function
 #define TFSIZE 2
 VSNRAY_ALIGN(32) static const vec4 tfdata[TFSIZE] = {
         { 0.0f, 0.0f, 0.0f, 0.0f },
-        { 1.0f, 1.0f, 1.0f, 1.0f }
-//        { 0.0f, 0.0f, 0.0f, 0.02f },
-//        { 0.7f, 0.1f, 0.2f, 0.03f },
-//        { 0.1f, 0.9f, 0.3f, 0.04f },
-//        { 1.0f, 1.0f, 1.0f, 0.05f }
+        { 0.0001f, 0.0001f, 0.0001f, 1.0f }
         };
 
 //-------------------------------------------------------------------------------------------------
@@ -77,7 +73,6 @@ struct renderer : viewer_type
 {
     renderer()
         : viewer_type(512, 512, "Visionaray Volume Rendering Example")
-        , algo(projection_algo::AlphaCompositing)
         , bbox({ -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f })
         , rt(
             host_device_rt::CPU,
@@ -87,7 +82,6 @@ struct renderer : viewer_type
             )
         , host_sched(8)
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
         , device_sched(8, 8)
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
@@ -103,23 +97,11 @@ struct renderer : viewer_type
                     "filename",
                     support::cl::Desc("Input file in nii format"),
                     support::cl::Positional,
+                    support::cl::Required,
                     support::cl::init(filename)
                     ) );
 
-        add_cmdline_option( support::cl::makeOption<projection_algo&>({
-                { "alpha", projection_algo::AlphaCompositing, "Aphla compositing" },
-                { "max", projection_algo::MaxIntensity, "Maximum intensity" },
-                { "min", projection_algo::MinIntensity, "Minimum intensity" },
-                { "drr", projection_algo::DRR, "DRR" },
-            },
-            "algo",
-            support::cl::Desc("Projection algorithm"),
-            support::cl::ArgRequired,
-            support::cl::init(algo)
-            ) );
-
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
         add_cmdline_option( support::cl::makeOption<host_device_rt::mode_type&>({
                 { "cpu", host_device_rt::CPU, "Rendering on the CPU" },
                 { "gpu", host_device_rt::GPU, "Rendering on the GPU" },
@@ -133,7 +115,6 @@ struct renderer : viewer_type
 
     }
 
-    projection_algo                                     algo;
     aabb                                                bbox;
     pinhole_camera                                      cam;
     host_device_rt                                      rt;
@@ -143,7 +124,6 @@ struct renderer : viewer_type
     transfunc_t                                         transfunc;
     transfunc_ref_t                                     transfunc_ref;
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
     cuda_sched<ray_type_gpu>                            device_sched;
     cuda_volume_t                                       device_volume;
     cuda_volume_ref_t                                   device_volume_ref;
@@ -185,12 +165,10 @@ void renderer::on_display()
                 rt,
                 host_sched,
                 cam,
-                algo,
                 delta
             );
     }
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
     else if (rt.mode() == host_device_rt::GPU)
     {
         render_cu(
@@ -201,7 +179,6 @@ void renderer::on_display()
                 rt,
                 device_sched,
                 cam,
-                algo,
                 delta
             );
     }
@@ -236,26 +213,6 @@ void renderer::on_key_press(key_event const& event)
 {
     switch (event.key())
     {
-    case '1':
-        std::cout << "Switching algorithm: Alpha compositing\n";
-        algo = projection_algo::AlphaCompositing;
-        break;
-
-    case '2':
-        std::cout << "Switching algorithm: Maximum intensity projection\n";
-        algo = projection_algo::MaxIntensity;
-        break;
-
-    case '3':
-        std::cout << "Switching algorithm: Minimum intensity projection\n";
-        algo = projection_algo::MinIntensity;
-        break;
-
-    case '4':
-        std::cout << "Switching algorithm: DRR\n";
-        algo = projection_algo::DRR;
-        break;
-
     case 'c':
         if (rt.color_space() == host_device_rt::RGB)
         {
@@ -294,39 +251,16 @@ void renderer::on_key_press(key_event const& event)
 //
 void renderer::load_volume()
 {
-    if (filename == "")
-    {
-        std::cerr << "No volume file provided. Using default volume." << std::endl;
-        volume = volume_t(2, 2, 2);
-        volume.reset(voldata_16ui);
-        volume.set_filter_mode(Nearest);
-        volume.set_address_mode(Clamp);
-        volume_ref.reset(voldata_16ui);
-        volume_ref.set_filter_mode(Nearest);
-        volume_ref.set_address_mode(Clamp);
-
-        transfunc_ref = transfunc_ref_t(TFSIZE);
-        transfunc_ref.reset(tfdata);
-        transfunc_ref.set_filter_mode(Linear);
-        transfunc_ref.set_address_mode(Clamp);
-
-        value_range = vec2f(0.0, 1.0);
-
-//#ifdef __CUDACC__
+    transfunc_ref = transfunc_ref_t(TFSIZE);
+    transfunc_ref.reset(tfdata);
+    transfunc_ref.set_filter_mode(Linear);
+    transfunc_ref.set_address_mode(Clamp);
 #if VSNRAY_COMMON_HAVE_CUDA
-        std::cout << "Copying volume and transfer function to gpu.\n";
-        device_volume = cuda_volume_t(volume_ref);
-        device_volume.set_filter_mode(Nearest);
-        device_volume.set_address_mode(Clamp);
-        device_volume_ref = cuda_volume_ref_t(device_volume);
-
-        device_transfunc = cuda_transfunc_t(transfunc_ref);
-        device_transfunc.set_filter_mode(Linear);
-        device_transfunc.set_address_mode(Clamp);
-        device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
+    device_transfunc = cuda_transfunc_t(transfunc_ref);
+    device_transfunc.set_filter_mode(Linear);
+    device_transfunc.set_address_mode(Clamp);
+    device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
-        return;
-    }
 
     std::cout << "Loading volume file: " << filename << std::endl;
     vd = new vvVolDesc(filename.c_str());
@@ -339,12 +273,6 @@ void renderer::load_volume()
         return;
     }
     else vd->printInfoLine();
-    // Set default color scheme if no TF present:
-    if (vd->tf[0].isEmpty())
-    {
-      vd->tf[0].setDefaultAlpha(0, 0.0, 1.0);
-      vd->tf[0].setDefaultColors((vd->getChan()==1) ? 0 : 2, 0.0, 1.0);
-    }
     virvo::TextureUtil tu(vd);
     assert(vd->getChan() == 1); // only support single channel data
     virvo::TextureUtil::Pointer tex_data = nullptr;
@@ -360,39 +288,13 @@ void renderer::load_volume()
     volume_ref = volume_ref_t(volume);
     volume_ref.set_filter_mode(Nearest);
     volume_ref.set_address_mode(Clamp);
-    // update tf
-    aligned_vector<vec4> tf(256 * 1 * 1);
-    vd->computeTFTexture(0, 256, 1, 1, reinterpret_cast<float*>(tf.data()));
-    transfunc = transfunc_t(tf.size());
-    transfunc.reset(tf.data());
-    transfunc_ref = transfunc_ref_t(transfunc);
-    transfunc_ref.set_filter_mode(Linear);
-    transfunc_ref.set_address_mode(Clamp);
 #if VSNRAY_COMMON_HAVE_CUDA
-//#ifdef __CUDACC__
     std::cout << "Copying volume and transfer function to gpu.\n";
     device_volume = cuda_volume_t(volume_ref);
     device_volume.set_filter_mode(Nearest);
     device_volume.set_address_mode(Clamp);
     device_volume_ref = cuda_volume_ref_t(device_volume);
-    device_transfunc = cuda_transfunc_t(transfunc_ref);
-    device_transfunc.set_filter_mode(Linear);
-    device_transfunc.set_address_mode(Clamp);
-    device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
 #endif
-    
-    //if (1)
-    //{
-    //    std::cout << "Using TF:\n";
-    //    for (int i=0; i<4; ++i)
-    //    {
-    //        for (int j=0; j<4; ++j)
-    //        {
-    //            std::cout << tf[i][j] << ", ";
-    //        }
-    //        std::cout << "\n";
-    //    }
-    //}
 
     bbox = aabb(vec3(vd->getBoundingBox().min.data()), vec3(vd->getBoundingBox().max.data()));
 
@@ -411,6 +313,7 @@ void renderer::load_volume()
     delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
 
     value_range = vec2f(vd->range(0).x, vd->range(0).y);
+    std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
 //-------------------------------------------------------------------------------------------------

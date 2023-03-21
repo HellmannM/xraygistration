@@ -40,14 +40,6 @@ namespace visionaray
 // Helper types
 //
 
-enum projection_algo
-{
-    AlphaCompositing,
-    MaxIntensity,
-    MinIntensity,
-    DRR
-};
-
 using scalar_type_cpu           = float;
 //using scalar_type_cpu           = simd::float4;
 //using scalar_type_cpu           = simd::float8;
@@ -57,7 +49,8 @@ using ray_type_cpu              = basic_ray<scalar_type_cpu>;
 using ray_type_gpu              = basic_ray<scalar_type_gpu>;
 
 using camera_t = pinhole_camera;
-using volume_value_t = unorm<16>;
+//using volume_value_t = unorm<16>;
+using volume_value_t = int16_t;
 //using volume_value_t = float;
 using volume_t = texture<volume_value_t, 3>;
 using transfunc_t = texture<vector<4, float>, 1>;
@@ -86,7 +79,6 @@ void render_cpp(
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
-        projection_algo                 algo,
         float                           delta
         );
 
@@ -99,7 +91,6 @@ void render_cu(
         host_device_rt&                 rt,
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
-        projection_algo                 algo,
         float                           delta
         );
 #endif
