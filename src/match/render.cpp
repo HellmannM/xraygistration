@@ -45,9 +45,9 @@ void render_cpp(
         {
             auto pos = ray.ori + ray.dir * t;
             auto tex_coord = vector<3, S>(
-                    ( pos.x + 1.0f ) / 2.0f,
-                    (-pos.y + 1.0f ) / 2.0f,
-                    (-pos.z + 1.0f ) / 2.0f
+                    ( pos.x + (bbox.size().x / 2) ) / bbox.size().x,
+                    (-pos.y + (bbox.size().y / 2) ) / bbox.size().y,
+                    (-pos.z + (bbox.size().z / 2) ) / bbox.size().z
                     );
 
             // sample volume and do post-classification
