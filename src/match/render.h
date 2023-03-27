@@ -73,7 +73,6 @@ using host_sched_t = tiled_sched<R>;
 
 void render_cpp(
         volume_ref_t const&             volume,
-        transfunc_ref_t const&          transfunc,
         aabb                            bbox,
         vec2f                           value_range,
         host_device_rt&                 rt,
@@ -85,7 +84,6 @@ void render_cpp(
 #ifdef __CUDACC__
 void render_cu(
         cuda_volume_ref_t const&        volume,
-        cuda_transfunc_ref_t const&     transfunc,
         aabb                            bbox,
         vec2f                           value_range,
         host_device_rt&                 rt,

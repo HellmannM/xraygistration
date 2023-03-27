@@ -46,26 +46,6 @@ using viewer_type   = viewer_glut;
 
 
 //-------------------------------------------------------------------------------------------------
-// Texture data
-//
-
-// volume data
-//VSNRAY_ALIGN(32) static const unorm<16> voldata_16ui[2 * 2 * 2] = {
-VSNRAY_ALIGN(32) static const int16_t voldata_16ui[2 * 2 * 2] = {
-         1, 0,
-         0, 3,
-         0, 5,
-        10, 0
-        };
-
-// post-classification transfer function
-#define TFSIZE 2
-VSNRAY_ALIGN(32) static const vec4 tfdata[TFSIZE] = {
-        { 0.0f, 0.0f, 0.0f, 0.0f },
-        { 0.0001f, 0.0001f, 0.0001f, 1.0f }
-        };
-
-//-------------------------------------------------------------------------------------------------
 // struct with state variables
 //
 
@@ -85,7 +65,6 @@ struct renderer : viewer_type
         , device_sched(8, 8)
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
-        , transfunc_ref(4)
         , filename()
         , texture_format(virvo::PF_R16UI)
         , delta(0.01f)
@@ -121,14 +100,10 @@ struct renderer : viewer_type
     tiled_sched<ray_type_cpu>                           host_sched;
     volume_t                                            volume;
     volume_ref_t                                        volume_ref;
-    transfunc_t                                         transfunc;
-    transfunc_ref_t                                     transfunc_ref;
 #if VSNRAY_COMMON_HAVE_CUDA
     cuda_sched<ray_type_gpu>                            device_sched;
     cuda_volume_t                                       device_volume;
     cuda_volume_ref_t                                   device_volume_ref;
-    cuda_transfunc_t                                    device_transfunc;
-    cuda_transfunc_ref_t                                device_transfunc_ref;
 #endif
 
     std::string                                         filename;
@@ -159,7 +134,6 @@ void renderer::on_display()
     {
         render_cpp(
                 volume_ref,
-                transfunc_ref,
                 bbox,
                 value_range,
                 rt,
@@ -173,7 +147,6 @@ void renderer::on_display()
     {
         render_cu(
                 device_volume_ref,
-                device_transfunc_ref,
                 bbox,
                 value_range,
                 rt,
@@ -251,17 +224,6 @@ void renderer::on_key_press(key_event const& event)
 //
 void renderer::load_volume()
 {
-    transfunc_ref = transfunc_ref_t(TFSIZE);
-    transfunc_ref.reset(tfdata);
-    transfunc_ref.set_filter_mode(Linear);
-    transfunc_ref.set_address_mode(Clamp);
-#if VSNRAY_COMMON_HAVE_CUDA
-    device_transfunc = cuda_transfunc_t(transfunc_ref);
-    device_transfunc.set_filter_mode(Linear);
-    device_transfunc.set_address_mode(Clamp);
-    device_transfunc_ref = cuda_transfunc_ref_t(device_transfunc);
-#endif
-
     std::cout << "Loading volume file: " << filename << std::endl;
     vd = new vvVolDesc(filename.c_str());
     vvFileIO fio;
@@ -311,6 +273,7 @@ void renderer::load_volume()
     //TODO expose quality variable
     int quality = 1.f;
     delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
+    std::cout << "Using delta=" << delta << "\n";
 
     value_range = vec2f(vd->range(0).x, vd->range(0).y);
     std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";

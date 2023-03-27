@@ -8,7 +8,6 @@ namespace visionaray
 
 void render_cu(
         cuda_volume_ref_t const&        volume,
-        cuda_transfunc_ref_t const&     transfunc,
         aabb                            bbox,
         vec2f                           value_range,
         host_device_rt&                 rt,
@@ -40,6 +39,7 @@ void render_cu(
         auto t = hit_rec.tnear;
 
         result.color = C(0.0);
+        float line_integral = 0.0f;
 
         while ( any(t < hit_rec.tfar) )
         {
@@ -52,23 +52,18 @@ void render_cu(
 
             // sample volume and do post-classification
             auto voxel = tex3D(volume, tex_coord);
-            //C color = tex1D(transfunc, voxel);
             float voxel_norm = ((float)voxel - value_range.x) / range;
-            float remapped_voxel = voxel_norm * (1.f - 1.f/transfunc.width()) + (0.5f / transfunc.width());
-            C color = tex1D(transfunc, remapped_voxel);
-
-            // premultiplied alpha
-            color.xyz() *= color.w;
-
-            result.color += select(
-                    t < hit_rec.tfar,
-                    color,
-                    C(0.0)
-                    );
+            line_integral += select(
+                    t< hit_rec.tfar,
+                    voxel_norm,
+                    0.f
+                    ) * delta * 0.001f;
 
             // step on
             t += delta;
         }
+
+        result.color = C(clamp(line_integral, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;
