@@ -21,8 +21,6 @@ void render_cu(
             rt
             );
 
-    auto range = value_range.y - value_range.x;
-
     using R = ray_type_gpu;
     using S = R::scalar_type;
     using C = vector<4, S>;
@@ -50,20 +48,21 @@ void render_cu(
                     (-pos.z + (bbox.size().z / 2) ) / bbox.size().z
                     );
 
-            // sample volume and do post-classification
+            // sample volume
             auto voxel = tex3D(volume, tex_coord);
-            float voxel_norm = ((float)voxel - value_range.x) / range;
+            // clamp
+            voxel = voxel < value_range.x ? value_range.x : voxel;
+            //voxel = voxel > value_range.y ? value_range.y : voxel;
             line_integral += select(
-                    t< hit_rec.tfar,
-                    voxel_norm,
-                    0.f
-                    ) * delta * 0.001f;
+                    t < hit_rec.tfar,
+                    voxel - value_range.x,
+                    0.f);
 
             // step on
             t += delta;
         }
 
-        result.color = C(clamp(line_integral, 0.f, 1.f));
+        result.color = C(clamp(line_integral * delta * 0.000002f, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;

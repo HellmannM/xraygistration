@@ -52,13 +52,13 @@ using viewer_type   = viewer_glut;
 struct renderer : viewer_type
 {
     renderer()
-        : viewer_type(512, 512, "Visionaray Volume Rendering Example")
+        : viewer_type(1024, 1024, "Visionaray Volume Rendering Example")
         , bbox({ -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f })
         , rt(
             host_device_rt::CPU,
             true /* double buffering */,
             false /* direct rendering */,
-            host_device_rt::SRGB
+            host_device_rt::RGB
             )
         , host_sched(8)
 #if VSNRAY_COMMON_HAVE_CUDA
@@ -66,7 +66,7 @@ struct renderer : viewer_type
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
         , filename()
-        , texture_format(virvo::PF_R16UI)
+        , texture_format(virvo::PF_R16I)
         , delta(0.01f)
         , bgcolor({1.f, 1.f, 1.f})
     {
@@ -246,7 +246,9 @@ void renderer::load_volume()
             0 /*frame*/ );
     // update vol
     volume = volume_t(vd->vox[0], vd->vox[1], vd->vox[2]);
-    volume.reset(reinterpret_cast<volume_ref_t::value_type const*>(tex_data));
+    //volume.reset(reinterpret_cast<volume_ref_t::value_type const*>(tex_data));
+    volume.reset(reinterpret_cast<volume_value_t const*>(vd->getRaw(0)));
+//    volume.reset(reinterpret_cast<volume_value_t const*>(tex_data));
     volume_ref = volume_ref_t(volume);
     volume_ref.set_filter_mode(Nearest);
     volume_ref.set_address_mode(Clamp);
@@ -271,12 +273,14 @@ void renderer::load_volume()
         axis = 2;
     }
     //TODO expose quality variable
-    int quality = 1.f;
+    int quality = 1.0f;
     delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
     std::cout << "Using delta=" << delta << "\n";
 
     value_range = vec2f(vd->range(0).x, vd->range(0).y);
     std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
+    value_range = vec2f(-900, vd->range(0).y);
+    std::cout << "Clamping to:         min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
 //-------------------------------------------------------------------------------------------------
