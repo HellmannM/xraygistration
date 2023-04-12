@@ -3,6 +3,7 @@
 
 #include <common/config.h>
 
+#include <cstring> // memcpy
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -11,11 +12,18 @@
 
 #include <GL/glew.h>
 
+// OpenCV includes
+//#include <opencv2/opencv.hpp>
+#include <opencv2/core/mat.hpp> // cv::Mat
+#include <opencv2/features2d.hpp> // cv::ORB
+
 #if VSNRAY_COMMON_HAVE_CUDA
+// CUDA includes
 #include <cuda_runtime_api.h>
 #include <thrust/device_vector.h>
 #endif
 
+// CmdLine includes
 #include <Support/CmdLine.h>
 #include <Support/CmdLineUtil.h>
 
@@ -69,6 +77,9 @@ struct renderer : viewer_type
         , texture_format(virvo::PF_R16I)
         , delta(0.01f)
         , bgcolor({1.f, 1.f, 1.f})
+        , orb(cv::ORB::create())
+        , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
+        , matcher_initialized(false)
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -114,7 +125,13 @@ struct renderer : viewer_type
     vec3                                                bgcolor;
     vec2f                                               value_range;
 
+    cv::Ptr<cv::ORB>                                    orb;
+    cv::Ptr<cv::BFMatcher>                              matcher;
+    bool                                                matcher_initialized;
+
     void load_volume();
+    void update_reference_image();
+    void match();
 protected:
 
     void on_display();
@@ -212,6 +229,16 @@ void renderer::on_key_press(key_event const& event)
 #endif
         break;
 
+    case 'r':
+        std::cout << "Updating reference image.\n";
+        update_reference_image();
+        break;
+
+    case 't':
+        std::cout << "Matching...\n";
+        match();
+        break;
+
     default:
         break;
     }
@@ -281,6 +308,48 @@ void renderer::load_volume()
     std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
     value_range = vec2f(-900, vd->range(0).y);
     std::cout << "Clamping to:         min=" << value_range.x << " max=" << value_range.y << "\n";
+}
+
+void renderer::update_reference_image()
+{
+    void* data = malloc(4 * sizeof(uint8_t) * rt.height() * rt.width());
+    memcpy(data, rt.color(), 4 * sizeof(uint8_t) * rt.height() * rt.width());
+    auto reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, data);
+
+    std::vector<cv::KeyPoint> reference_keypoints;
+    cv::Mat reference_descriptors;
+    orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
+
+    matcher->clear();
+    matcher->add(reference_descriptors);
+
+    matcher_initialized = true;
+}
+
+void renderer::match()
+{
+    if (!matcher_initialized) return;
+
+    void* data = malloc(4 * sizeof(uint8_t) * rt.height() * rt.width());
+    memcpy(data, rt.color(), 4 * sizeof(uint8_t) * rt.height() * rt.width());
+    auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, data);
+
+    std::vector<cv::KeyPoint> current_keypoints;
+    cv::Mat current_descriptors;
+    orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
+    std::cout << "Found " << current_descriptors.size() << " descriptors.\n";
+    std::vector<cv::DMatch> matches;
+    matcher->match(current_descriptors, matches, cv::noArray());
+    std::cout << "Found " << matches.size() << " matches.\n";
+    std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
+    float distance = 0.f;
+    for (auto& m : matches)
+    {
+        distance += m.distance;
+        std::cout << m.distance << "\n";
+    }
+    std::cout << "total match distance: " << distance << "\n";
 }
 
 //-------------------------------------------------------------------------------------------------
