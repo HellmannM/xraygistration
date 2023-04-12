@@ -13,7 +13,7 @@
 #include <GL/glew.h>
 
 // OpenCV includes
-//#include <opencv2/opencv.hpp>
+#include <opencv2/opencv.hpp>
 #include <opencv2/core/mat.hpp> // cv::Mat
 #include <opencv2/features2d.hpp> // cv::ORB
 
@@ -128,10 +128,15 @@ struct renderer : viewer_type
     cv::Ptr<cv::ORB>                                    orb;
     cv::Ptr<cv::BFMatcher>                              matcher;
     bool                                                matcher_initialized;
+    std::vector<vector<4, unorm<8>>>                    reference_image_std;
+    cv::Mat                                             reference_image;
+    cv::Mat                                             reference_descriptors;
+    std::vector<cv::KeyPoint>                           reference_keypoints;
 
     void load_volume();
     void update_reference_image();
     void match();
+    std::vector<vector<4, unorm<8>>> get_current_image();
 protected:
 
     void on_display();
@@ -310,14 +315,60 @@ void renderer::load_volume()
     std::cout << "Clamping to:         min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
+std::vector<vector<4, unorm<8>>> renderer::get_current_image()
+{
+    std::vector<vector<4, unorm<8>>> rgba(rt.width() * rt.height());
+    
+    memcpy(rgba.data(), rt.color(host_device_rt::buffer::Front), rt.width() * rt.height() * sizeof(vector<4, unorm<8>>));
+//    swizzle(
+//        rgb.data(),
+//        PF_RGB8,
+//        rt.color(),
+//        PF_RGBA32F,
+//        //PF_RGB8,
+//        rt.width() * rt.height(),
+//        TruncateAlpha
+//        );
+//
+//    if (rt.color_space() == host_device_rt::SRGB)
+//    {
+//        for (int y = 0; y < rt.height(); ++y)
+//        {
+//            for (int x = 0; x < rt.width(); ++x)
+//            {
+//                auto& color = rgb[y * rt.width() + x];
+//                color.x = powf(color.x, 1 / 2.2f);
+//                color.y = powf(color.y, 1 / 2.2f);
+//                color.z = powf(color.z, 1 / 2.2f);
+//            }
+//        }
+//    }
+
+    // Flip so that origin is (top|left)
+    std::vector<vector<4, unorm<8>>> flipped(rt.width() * rt.height());
+
+    for (int y = 0; y < rt.height(); ++y)
+    {
+        for (int x = 0; x < rt.width(); ++x)
+        {
+            int yy = rt.height() - y - 1;
+            flipped[yy * rt.width() + x] = rgba[y * rt.width() + x];
+        }
+    }
+
+    return flipped;
+}
+
 void renderer::update_reference_image()
 {
-    void* data = malloc(4 * sizeof(uint8_t) * rt.height() * rt.width());
-    memcpy(data, rt.color(), 4 * sizeof(uint8_t) * rt.height() * rt.width());
-    auto reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, data);
+    //auto reference_image_std = get_current_image();
+    //auto reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
+    reference_image_std = get_current_image();
+    reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
 
-    std::vector<cv::KeyPoint> reference_keypoints;
-    cv::Mat reference_descriptors;
+    //std::vector<cv::KeyPoint> reference_keypoints;
+    //cv::Mat reference_descriptors;
+    reference_keypoints.clear();
     orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
     std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
 
@@ -331,9 +382,8 @@ void renderer::match()
 {
     if (!matcher_initialized) return;
 
-    void* data = malloc(4 * sizeof(uint8_t) * rt.height() * rt.width());
-    memcpy(data, rt.color(), 4 * sizeof(uint8_t) * rt.height() * rt.width());
-    auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, data);
+    auto current_image_std = get_current_image();
+    auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
 
     std::vector<cv::KeyPoint> current_keypoints;
     cv::Mat current_descriptors;
@@ -350,6 +400,11 @@ void renderer::match()
         std::cout << m.distance << "\n";
     }
     std::cout << "total match distance: " << distance << "\n";
+    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
+    cv::Mat img;
+    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
+    cv::imshow("Display Image", img);
+    cv::waitKey(0);
 }
 
 //-------------------------------------------------------------------------------------------------

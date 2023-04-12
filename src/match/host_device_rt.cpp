@@ -139,7 +139,27 @@ void host_device_rt::swap_buffers()
 
 host_device_rt::color_type const* host_device_rt::color(buffer buf) const
 {
-    return impl_->host_rt[impl_->buffer_index[buf]].color();
+    if (impl_->mode == CPU)
+    {
+        return impl_->host_rt[impl_->buffer_index[buf]].color();
+    }
+    else
+    {
+#if VSNRAY_HAVE_CUDA
+//#ifdef __CUDACC__
+        if (impl_->direct_rendering)
+        {
+            return impl_->direct_rt[impl_->buffer_index[buf]].color();
+        }
+        else
+        {
+            return impl_->indirect_rt[impl_->buffer_index[buf]].color();
+        }
+#else
+        assert(0);
+        return {};
+#endif
+    }
 }
 
 host_device_rt::ref_type host_device_rt::ref(buffer buf)
