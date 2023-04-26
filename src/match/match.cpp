@@ -77,7 +77,17 @@ struct renderer : viewer_type
         , texture_format(virvo::PF_R16I)
         , delta(0.01f)
         , bgcolor({1.f, 1.f, 1.f})
-        , orb(cv::ORB::create())
+        , orb(cv::ORB::create(
+                /*int nfeatures     */ 5000,
+                /*float scaleFactor */ 1.2f,
+                /*int nlevels       */ 8,
+                /*int edgeThreshold */ 31,
+                /*int firstLevel    */ 0,
+                /*int WTA_K         */ 2,
+                /*int scoreType     */ cv::ORB::HARRIS_SCORE,
+                /*int patchSize     */ 31,
+                /*int fastThreshold */ 15
+          ))
         , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
         , matcher_initialized(false)
     {
