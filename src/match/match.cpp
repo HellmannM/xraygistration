@@ -417,19 +417,21 @@ void renderer::match()
     std::vector<cv::DMatch> matches;
     matcher->match(current_descriptors, matches, cv::noArray());
     std::cout << "Found " << matches.size() << " matches.\n";
-    std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
+    float match_ratio = (float)matches.size() / reference_descriptors.size().height;
+    //std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
     float distance = 0.f;
     for (auto& m : matches)
     {
         distance += m.distance;
-        std::cout << m.distance << "\n";
+        //std::cout << m.distance << "\n";
     }
-    std::cout << "total match distance: " << distance << "\n";
-    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
-    cv::Mat img;
-    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
-    cv::imshow("Display Image", img);
-    cv::waitKey(0);
+    std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
+    //std::cout << "total match distance: " << distance << "\n";
+    //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
+    //cv::Mat img;
+    //cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
+    //cv::imshow("Display Image", img);
+    //cv::waitKey(0);
 }
 
 //-------------------------------------------------------------------------------------------------
