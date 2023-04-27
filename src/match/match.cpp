@@ -329,7 +329,22 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
 {
     std::vector<vector<4, unorm<8>>> rgba(rt.width() * rt.height());
     
-    memcpy(rgba.data(), rt.color(host_device_rt::buffer::Front), rt.width() * rt.height() * sizeof(vector<4, unorm<8>>));
+    if (rt.mode() == host_device_rt::CPU)
+    {
+        memcpy(rgba.data(), rt.color(host_device_rt::buffer::Front), rt.width() * rt.height() * sizeof(vector<4, unorm<8>>));
+    }
+#if VSNRAY_COMMON_HAVE_CUDA
+    else if (rt.mode() == host_device_rt::GPU)
+    {
+        cudaMemcpy(
+            rgba.data(),
+            rt.color(host_device_rt::buffer::Front),
+            rt.width() * rt.height() * sizeof(vector<4, unorm<8>>),
+            cudaMemcpyDeviceToHost
+            );
+    }
+#endif
+
 //    swizzle(
 //        rgb.data(),
 //        PF_RGB8,
