@@ -76,6 +76,7 @@ struct renderer : viewer_type
         , filename()
         , texture_format(virvo::PF_R16I)
         , delta(0.01f)
+        , integration_coefficient(0.000002f)
         , bgcolor({1.f, 1.f, 1.f})
         , orb(cv::ORB::create(
                 /*int nfeatures     */ 5000,
@@ -132,6 +133,7 @@ struct renderer : viewer_type
     // Internal storage format for textures
     virvo::PixelFormat                                  texture_format;
     float                                               delta;
+    float                                               integration_coefficient;
     vec3                                                bgcolor;
     vec2f                                               value_range;
 
@@ -171,7 +173,8 @@ void renderer::on_display()
                 rt,
                 host_sched,
                 cam,
-                delta
+                delta,
+                integration_coefficient
             );
     }
 #if VSNRAY_COMMON_HAVE_CUDA
@@ -184,7 +187,8 @@ void renderer::on_display()
                 rt,
                 device_sched,
                 cam,
-                delta
+                delta,
+                integration_coefficient
             );
     }
 #endif
@@ -252,6 +256,16 @@ void renderer::on_key_press(key_event const& event)
     case 't':
         std::cout << "Matching...\n";
         match();
+        break;
+
+    case '+':
+        integration_coefficient += 0.0000001f;
+        std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        break;
+
+    case '-':
+        integration_coefficient -= 0.0000001f;
+        std::cout << "Integration coefficient = " << integration_coefficient << "\n";
         break;
 
     default:

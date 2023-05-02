@@ -78,7 +78,8 @@ void render_cpp(
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
-        float                           delta
+        float                           delta,
+        float                           integration_coefficient
         );
 
 #ifdef __CUDACC__
@@ -89,7 +90,8 @@ void render_cu(
         host_device_rt&                 rt,
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
-        float                           delta
+        float                           delta,
+        float                           integration_coefficient
         );
 #endif
 

@@ -13,7 +13,8 @@ void render_cpp(
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
-        float                           delta
+        float                           delta,
+        float                           integration_coefficient
         )
 {
     auto sparams = make_sched_params(
@@ -62,7 +63,7 @@ void render_cpp(
             t += delta;
         }
 
-        result.color = C(clamp(line_integral * delta * 0.000002f, 0.f, 1.f));
+        result.color = C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;
