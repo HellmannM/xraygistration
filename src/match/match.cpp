@@ -35,6 +35,7 @@
 #include <visionaray/pinhole_camera.h>
 #include <visionaray/scheduler.h>
 
+#include <common/image.h>
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
@@ -60,7 +61,8 @@ using viewer_type   = viewer_glut;
 struct renderer : viewer_type
 {
     renderer()
-        : viewer_type(1024, 1024, "Visionaray Volume Rendering Example")
+        //: viewer_type(1024, 1024, "Visionaray Volume Rendering Example")
+        : viewer_type(500, 384, "Visionaray Volume Rendering Example")
         , bbox({ -1.0f, -1.0f, -1.0f }, { 1.0f, 1.0f, 1.0f })
         , rt(
             host_device_rt::CPU,
@@ -73,10 +75,11 @@ struct renderer : viewer_type
         , device_sched(8, 8)
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
-        , filename()
+        , volume_filename()
+        , reference_image_filename()
         , texture_format(virvo::PF_R16I)
         , delta(0.01f)
-        , integration_coefficient(0.000002f)
+        , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
         , orb(cv::ORB::create(
                 /*int nfeatures     */ 5000,
@@ -94,13 +97,23 @@ struct renderer : viewer_type
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
-                    support::cl::Parser<>(),
-                    "filename",
-                    support::cl::Desc("Input file in nii format"),
-                    support::cl::Positional,
-                    support::cl::Required,
-                    support::cl::init(filename)
-                    ) );
+            support::cl::Parser<>(),
+            "volume",
+            support::cl::Desc("Volume file in nii format"),
+            support::cl::Positional,
+            support::cl::Required,
+            support::cl::init(volume_filename)
+            ) );
+
+        add_cmdline_option( support::cl::makeOption<std::string&>(
+            support::cl::Parser<>(),
+            "ref",
+            support::cl::Desc("Reference image file in nii format"),
+            //support::cl::Positional,
+            //support::cl::Optional,
+            support::cl::ArgRequired,
+            support::cl::init(reference_image_filename)
+            ) );
 
 #if VSNRAY_COMMON_HAVE_CUDA
         add_cmdline_option( support::cl::makeOption<host_device_rt::mode_type&>({
@@ -128,7 +141,8 @@ struct renderer : viewer_type
     cuda_volume_ref_t                                   device_volume_ref;
 #endif
 
-    std::string                                         filename;
+    std::string                                         volume_filename;
+    std::string                                         reference_image_filename;
     vvVolDesc*                                          vd;
     // Internal storage format for textures
     virvo::PixelFormat                                  texture_format;
@@ -141,11 +155,13 @@ struct renderer : viewer_type
     cv::Ptr<cv::BFMatcher>                              matcher;
     bool                                                matcher_initialized;
     std::vector<vector<4, unorm<8>>>                    reference_image_std;
+    std::vector<uint8_t>                                reference_image_std2;
     cv::Mat                                             reference_image;
     cv::Mat                                             reference_descriptors;
     std::vector<cv::KeyPoint>                           reference_keypoints;
 
     void load_volume();
+    void load_reference_image();
     void update_reference_image();
     void match();
     std::vector<vector<4, unorm<8>>> get_current_image();
@@ -280,8 +296,8 @@ void renderer::on_key_press(key_event const& event)
 //
 void renderer::load_volume()
 {
-    std::cout << "Loading volume file: " << filename << std::endl;
-    vd = new vvVolDesc(filename.c_str());
+    std::cout << "Loading volume file: " << volume_filename << "\n";
+    vd = new vvVolDesc(volume_filename.c_str());
     vvFileIO fio;
     if (fio.loadVolumeData(vd) != vvFileIO::OK)
     {
@@ -359,29 +375,31 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     }
 #endif
 
-//    swizzle(
-//        rgb.data(),
-//        PF_RGB8,
-//        rt.color(),
-//        PF_RGBA32F,
-//        //PF_RGB8,
-//        rt.width() * rt.height(),
-//        TruncateAlpha
-//        );
-//
-//    if (rt.color_space() == host_device_rt::SRGB)
-//    {
-//        for (int y = 0; y < rt.height(); ++y)
-//        {
-//            for (int x = 0; x < rt.width(); ++x)
-//            {
-//                auto& color = rgb[y * rt.width() + x];
-//                color.x = powf(color.x, 1 / 2.2f);
-//                color.y = powf(color.y, 1 / 2.2f);
-//                color.z = powf(color.z, 1 / 2.2f);
-//            }
-//        }
-//    }
+#if 0
+    swizzle(
+        rgb.data(),
+        PF_RGB8,
+        rt.color(),
+        PF_RGBA32F,
+        //PF_RGB8,
+        rt.width() * rt.height(),
+        TruncateAlpha
+        );
+
+    if (rt.color_space() == host_device_rt::SRGB)
+    {
+        for (int y = 0; y < rt.height(); ++y)
+        {
+            for (int x = 0; x < rt.width(); ++x)
+            {
+                auto& color = rgb[y * rt.width() + x];
+                color.x = powf(color.x, 1 / 2.2f);
+                color.y = powf(color.y, 1 / 2.2f);
+                color.z = powf(color.z, 1 / 2.2f);
+            }
+        }
+    }
+#endif
 
     // Flip so that origin is (top|left)
     std::vector<vector<4, unorm<8>>> flipped(rt.width() * rt.height());
@@ -398,15 +416,49 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     return flipped;
 }
 
+void renderer::load_reference_image()
+{
+    if (reference_image_filename.empty())
+    {
+        std::cout << "No reference image file provided.\n";
+    }
+    std::cout << "Loading reference image file: " << reference_image_filename << "\n";
+    visionaray::image img;
+    img.load(reference_image_filename);
+    std::cout << "width=" << img.width() << " height=" << img.height() << " pf=" << img.format() << "\n";
+    on_resize(img.width(), img.height());
+
+    int bpp = 4; //TODO
+    reference_image_std2.clear();
+    reference_image_std2.resize(img.width() * img.height() * bpp);
+    for (size_t y=0; y<img.height(); ++y)
+    {
+        for (size_t x=0; x<img.width(); ++x)
+        {
+            reference_image_std2[4*((img.height() - y - 1)*img.width() + x)    ] = img.data()[4*(y*img.width() + x)];
+            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 1] = img.data()[4*(y*img.width() + x) + 1];
+            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 2] = img.data()[4*(y*img.width() + x) + 2];
+            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 3] = img.data()[4*(y*img.width() + x) + 3];
+        }
+    }
+    //memcpy(reference_image_std2.data(), img.data(), img.width() * img.height() * bpp);
+    reference_image = cv::Mat(img.height(), img.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std2.data()));
+
+    reference_keypoints.clear();
+    orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
+
+    matcher->clear();
+    matcher->add(reference_descriptors);
+
+    matcher_initialized = true;
+}
+
 void renderer::update_reference_image()
 {
-    //auto reference_image_std = get_current_image();
-    //auto reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
     reference_image_std = get_current_image();
     reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
 
-    //std::vector<cv::KeyPoint> reference_keypoints;
-    //cv::Mat reference_descriptors;
     reference_keypoints.clear();
     orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
     std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
@@ -440,12 +492,12 @@ void renderer::match()
         //std::cout << m.distance << "\n";
     }
     std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
-    //std::cout << "total match distance: " << distance << "\n";
-    //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
-    //cv::Mat img;
-    //cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
-    //cv::imshow("Display Image", img);
-    //cv::waitKey(0);
+    std::cout << "total match distance: " << distance << "\n";
+    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
+    cv::Mat img;
+    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
+    cv::imshow("Display Image", img);
+    cv::waitKey(0);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -462,10 +514,11 @@ int main(int argc, char** argv)
     }
     catch (std::exception const& e)
     {
-        std::cerr << e.what() << '\n';
+        std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
     rend.load_volume();
+    rend.load_reference_image();
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 
