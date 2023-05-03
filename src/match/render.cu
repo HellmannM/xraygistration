@@ -63,7 +63,7 @@ void render_cu(
             t += delta;
         }
 
-        result.color = C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+        result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;
