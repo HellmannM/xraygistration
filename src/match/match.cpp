@@ -36,6 +36,7 @@
 #include <visionaray/scheduler.h>
 
 #include <common/image.h>
+#include <common/manip/arcball.h>
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
@@ -163,7 +164,8 @@ struct renderer : viewer_type
     void load_volume();
     void load_reference_image();
     void update_reference_image();
-    void match();
+    float match();
+    void search();
     std::vector<vector<4, unorm<8>>> get_current_image();
 protected:
 
@@ -217,6 +219,31 @@ void renderer::on_display()
     rt.display_color_buffer();
 }
 
+void renderer::search()
+{
+    auto best_cam = cam;
+    float best_result = 0.f;
+
+    float step_size = 1.f;
+    float search_distance = 10.f;
+    for (float x = best_cam.eye().x - search_distance; x <= best_cam.eye().x + search_distance; x+=step_size)
+    {
+        for (float y = best_cam.eye().y - search_distance; y <= best_cam.eye().y + search_distance; y+=step_size)
+        {
+            for (float z = best_cam.eye().z - search_distance; z <= best_cam.eye().z + search_distance; z+=step_size)
+            {
+                cam.look_at(vec3(x, y, z), cam.center(), cam.up());
+                on_display();
+                auto current_result = match();
+                if (current_result > best_result)
+                {
+                    best_result = current_result;
+                    best_cam = cam;
+                }
+            }
+        }
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 // resize event
@@ -267,6 +294,11 @@ void renderer::on_key_press(key_event const& event)
     case 'r':
         std::cout << "Updating reference image.\n";
         update_reference_image();
+        break;
+
+    case 's':
+        std::cout << "Searching best match...\n";
+        search();
         break;
 
     case 't':
@@ -469,9 +501,9 @@ void renderer::update_reference_image()
     matcher_initialized = true;
 }
 
-void renderer::match()
+float renderer::match()
 {
-    if (!matcher_initialized) return;
+    if (!matcher_initialized) return 0;
 
     auto current_image_std = get_current_image();
     auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
@@ -493,11 +525,12 @@ void renderer::match()
     }
     std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
     std::cout << "total match distance: " << distance << "\n";
-    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
-    cv::Mat img;
-    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
-    cv::imshow("Display Image", img);
-    cv::waitKey(0);
+//    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
+//    cv::Mat img;
+//    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
+//    cv::imshow("Display Image", img);
+//    cv::waitKey(0);
+    return match_ratio;
 }
 
 //-------------------------------------------------------------------------------------------------
