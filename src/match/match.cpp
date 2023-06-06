@@ -224,24 +224,45 @@ void renderer::search()
     auto best_cam = cam;
     float best_result = 0.f;
 
-    float step_size = 1.f;
-    float search_distance = 10.f;
-    for (float x = best_cam.eye().x - search_distance; x <= best_cam.eye().x + search_distance; x+=step_size)
+    float search_distance = cam.distance() * 0.2f;
+    int grid_size = 5;
+    float step_size = 2 * search_distance / (grid_size - 1);
+
+    constexpr int iterations = 5;
+    for (int iteration = 1; iteration <= iterations; ++iteration)
     {
-        for (float y = best_cam.eye().y - search_distance; y <= best_cam.eye().y + search_distance; y+=step_size)
+        std::cout << "Iteration " << iteration << " of " << iterations << "\n";
+        float progress = 0;
+        for (int x = 0; x < grid_size; ++x)
         {
-            for (float z = best_cam.eye().z - search_distance; z <= best_cam.eye().z + search_distance; z+=step_size)
+            for (int y = 0; y < grid_size; ++y)
             {
-                cam.look_at(vec3(x, y, z), cam.center(), cam.up());
-                on_display();
-                auto current_result = match();
-                if (current_result > best_result)
+                for (int z = 0; z < grid_size; ++z)
                 {
-                    best_result = current_result;
-                    best_cam = cam;
+                    const vec3 eye(
+                        best_cam.eye().x - search_distance + (x * step_size),
+                        best_cam.eye().y - search_distance + (y * step_size),
+                        best_cam.eye().z - search_distance + (z * step_size)
+                    );
+                    cam.look_at(eye, cam.center(), cam.up());
+                    on_display();
+                    auto current_result = match();
+                    if (current_result > best_result)
+                    {
+                        best_result = current_result;
+                        best_cam = cam;
+                    }
                 }
             }
+            // show progress
+            progress += 100.f / grid_size;
+            std::cout << "\r" << progress << " %";
+            std::cout.flush();
         }
+        cam = best_cam;
+        constexpr float relax = 1.01f; // modify search_distance slightly to avoid reusing exact same points.
+        search_distance = search_distance * 3 / grid_size * relax;
+        std::cout << " best value: " << best_result << "\n";
     }
 }
 
@@ -511,10 +532,10 @@ float renderer::match()
     std::vector<cv::KeyPoint> current_keypoints;
     cv::Mat current_descriptors;
     orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
-    std::cout << "Found " << current_descriptors.size() << " descriptors.\n";
+    //std::cout << "Found " << current_descriptors.size() << " descriptors.\n";
     std::vector<cv::DMatch> matches;
     matcher->match(current_descriptors, matches, cv::noArray());
-    std::cout << "Found " << matches.size() << " matches.\n";
+    //std::cout << "Found " << matches.size() << " matches.\n";
     float match_ratio = (float)matches.size() / reference_descriptors.size().height;
     //std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
     float distance = 0.f;
@@ -523,8 +544,8 @@ float renderer::match()
         distance += m.distance;
         //std::cout << m.distance << "\n";
     }
-    std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
-    std::cout << "total match distance: " << distance << "\n";
+    //std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
+    //std::cout << "total match distance: " << distance << "\n";
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
 //    cv::Mat img;
 //    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
