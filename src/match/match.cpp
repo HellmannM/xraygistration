@@ -225,23 +225,37 @@ void renderer::on_display()
 void renderer::search()
 {
     constexpr float relax = 1.1f; // modify search_distance slightly to avoid reusing exact same points.
-    constexpr int grid_size = 5;
-    constexpr int iterations = 5;
+    constexpr int grid_size = 7;
+    constexpr int iterations = 7;
 
-    // eye
-    std::cout << "searching eye...\n";
+//    // eye
+//    std::cout << "searching eye...\n";
+//    float eye_search_distance = cam.distance() * 0.2f;
+//    for (int iteration = 1; iteration <= iterations; ++iteration)
+//    {
+//        search_impl(search_mode::eye, grid_size, eye_search_distance);
+//        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
+//    }
+//
+//    // center
+//    std::cout << "searching center...\n";
+//    float center_search_distance = length(bbox.size()) * 0.2f;
+//    for (int iteration = 1; iteration <= iterations; ++iteration)
+//    {
+//        search_impl(search_mode::center, grid_size, center_search_distance);
+//        center_search_distance = center_search_distance * 3 / grid_size * relax;
+//    }
+
+    // intertwined
+    std::cout << "searching...\n";
     float eye_search_distance = cam.distance() * 0.2f;
-    for (int iteration = 1; iteration <= iterations; ++iteration)
-    {
-        search_impl(search_mode::eye, grid_size, eye_search_distance);
-        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
-    }
-
-    // center
-    std::cout << "searching center...\n";
     float center_search_distance = length(bbox.size()) * 0.2f;
     for (int iteration = 1; iteration <= iterations; ++iteration)
     {
+        // eye
+        search_impl(search_mode::eye, grid_size, eye_search_distance);
+        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
+        // center
         search_impl(search_mode::center, grid_size, center_search_distance);
         center_search_distance = center_search_distance * 3 / grid_size * relax;
     }
@@ -579,13 +593,20 @@ float renderer::match()
     matcher->match(current_descriptors, matches, cv::noArray());
     //std::cout << "Found " << matches.size() << " matches.\n";
     float match_ratio = (float)matches.size() / reference_descriptors.size().height;
+//    std::vector<cv::DMatch> good_matches;
+//    for (auto& m : matches)
+//    {
+//        if (m.distance < 70)
+//            good_matches.push_back(m);
+//    }
+//    float good_match_ratio = (float)good_matches.size() / reference_descriptors.size().height;
     //std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
-    float distance = 0.f;
-    for (auto& m : matches)
-    {
-        distance += m.distance;
-        //std::cout << m.distance << "\n";
-    }
+//    float distance = 0.f;
+//    for (auto& m : matches)
+//    {
+//        distance += m.distance;
+//        //std::cout << m.distance << "\n";
+//    }
     //std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
     //std::cout << "total match distance: " << distance << "\n";
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
