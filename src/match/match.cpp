@@ -61,6 +61,8 @@ using viewer_type   = viewer_glut;
 
 struct renderer : viewer_type
 {
+    enum search_mode { eye = 0, center, up };
+
     renderer()
         //: viewer_type(1024, 1024, "Visionaray Volume Rendering Example")
         : viewer_type(500, 384, "Visionaray Volume Rendering Example")
@@ -166,6 +168,7 @@ struct renderer : viewer_type
     void update_reference_image();
     float match();
     void search();
+    void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     std::vector<vector<4, unorm<8>>> get_current_image();
 protected:
 
@@ -221,49 +224,88 @@ void renderer::on_display()
 
 void renderer::search()
 {
-    auto best_cam = cam;
-    float best_result = 0.f;
-
-    float search_distance = cam.distance() * 0.2f;
-    int grid_size = 5;
-    float step_size = 2 * search_distance / (grid_size - 1);
-
+    constexpr float relax = 1.1f; // modify search_distance slightly to avoid reusing exact same points.
+    constexpr int grid_size = 5;
     constexpr int iterations = 5;
+
+    // eye
+    std::cout << "searching eye...\n";
+    float eye_search_distance = cam.distance() * 0.2f;
     for (int iteration = 1; iteration <= iterations; ++iteration)
     {
-        std::cout << "Iteration " << iteration << " of " << iterations << "\n";
-        float progress = 0;
-        for (int x = 0; x < grid_size; ++x)
+        search_impl(search_mode::eye, grid_size, eye_search_distance);
+        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
+    }
+
+    // center
+    std::cout << "searching center...\n";
+    float center_search_distance = length(bbox.size()) * 0.2f;
+    for (int iteration = 1; iteration <= iterations; ++iteration)
+    {
+        search_impl(search_mode::center, grid_size, center_search_distance);
+        center_search_distance = center_search_distance * 3 / grid_size * relax;
+    }
+}
+
+void renderer::search_impl(const search_mode mode, const int grid_size, const float search_distance)
+{
+    const float step_size = 2 * search_distance / (grid_size - 1);
+
+    auto best_cam = cam;
+    const auto initial_cam = cam;
+    float best_result = 0.f;
+
+    float progress = 0;
+    for (int x = 0; x < grid_size; ++x)
+    {
+        for (int y = 0; y < grid_size; ++y)
         {
-            for (int y = 0; y < grid_size; ++y)
+            for (int z = 0; z < grid_size; ++z)
             {
-                for (int z = 0; z < grid_size; ++z)
+                vec3 eye    = initial_cam.eye();
+                vec3 center = initial_cam.center();
+                vec3 up     = initial_cam.up();
+                switch (mode)
                 {
-                    const vec3 eye(
-                        best_cam.eye().x - search_distance + (x * step_size),
-                        best_cam.eye().y - search_distance + (y * step_size),
-                        best_cam.eye().z - search_distance + (z * step_size)
-                    );
-                    cam.look_at(eye, cam.center(), cam.up());
-                    on_display();
-                    auto current_result = match();
-                    if (current_result > best_result)
-                    {
-                        best_result = current_result;
-                        best_cam = cam;
-                    }
+                case search_mode::eye:
+                {
+                    eye.x = eye.x - search_distance + (x * step_size);
+                    eye.y = eye.y - search_distance + (y * step_size);
+                    eye.z = eye.z - search_distance + (z * step_size);
+                    break;
+                }
+                case search_mode::center:
+                {
+                    center.x = center.x - search_distance + (x * step_size);
+                    center.y = center.y - search_distance + (y * step_size);
+                    center.z = center.z - search_distance + (z * step_size);
+                    break;
+                }
+//                case search_mode::up:
+//                {
+//                    up.x = up.x - search_distance + (x * step_size);
+//                    up.y = up.y - search_distance + (y * step_size);
+//                    up.z = up.z - search_distance + (z * step_size);
+//                    break;
+//                }
+                }
+                cam.look_at(eye, center, up);
+                on_display();
+                auto current_result = match();
+                if (current_result > best_result)
+                {
+                    best_result = current_result;
+                    best_cam = cam;
                 }
             }
-            // show progress
-            progress += 100.f / grid_size;
-            std::cout << "\r" << progress << " %";
-            std::cout.flush();
         }
-        cam = best_cam;
-        constexpr float relax = 1.01f; // modify search_distance slightly to avoid reusing exact same points.
-        search_distance = search_distance * 3 / grid_size * relax;
-        std::cout << " best value: " << best_result << "\n";
+//        // show progress
+//        progress += 100.f / grid_size;
+//        std::cout << "\r" << progress << " %";
+//        std::cout.flush();
     }
+    cam = best_cam;
+    std::cout << " best value: " << best_result << "\n";
 }
 
 //-------------------------------------------------------------------------------------------------
