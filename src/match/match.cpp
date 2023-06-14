@@ -61,7 +61,7 @@ using viewer_type   = viewer_glut;
 
 struct renderer : viewer_type
 {
-    enum search_mode { eye = 0, center, up };
+    enum search_mode { eye = 0, center };
 
     renderer()
         //: viewer_type(1024, 1024, "Visionaray Volume Rendering Example")
@@ -169,6 +169,7 @@ struct renderer : viewer_type
     float match();
     void search();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
+    void search_impl_up(const float rotation_range);
     std::vector<vector<4, unorm<8>>> get_current_image();
 protected:
 
@@ -228,37 +229,61 @@ void renderer::search()
     constexpr int grid_size = 7;
     constexpr int iterations = 7;
 
-//    // eye
-//    std::cout << "searching eye...\n";
-//    float eye_search_distance = cam.distance() * 0.2f;
-//    for (int iteration = 1; iteration <= iterations; ++iteration)
-//    {
-//        search_impl(search_mode::eye, grid_size, eye_search_distance);
-//        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
-//    }
-//
-//    // center
-//    std::cout << "searching center...\n";
-//    float center_search_distance = length(bbox.size()) * 0.2f;
-//    for (int iteration = 1; iteration <= iterations; ++iteration)
-//    {
-//        search_impl(search_mode::center, grid_size, center_search_distance);
-//        center_search_distance = center_search_distance * 3 / grid_size * relax;
-//    }
-
     // intertwined
-    std::cout << "searching...\n";
     float eye_search_distance = cam.distance() * 0.2f;
     float center_search_distance = length(bbox.size()) * 0.2f;
+    float rotation_range = 360.f;
     for (int iteration = 1; iteration <= iterations; ++iteration)
     {
+        std::cout << "Iteration " << iteration << " of " << iterations << ":\n";
         // eye
         search_impl(search_mode::eye, grid_size, eye_search_distance);
         eye_search_distance = eye_search_distance * 3 / grid_size * relax;
-        // center
-        search_impl(search_mode::center, grid_size, center_search_distance);
-        center_search_distance = center_search_distance * 3 / grid_size * relax;
+//        // center
+//        search_impl(search_mode::center, grid_size, center_search_distance);
+//        center_search_distance = center_search_distance * 3 / grid_size * relax;
+        // up
+        search_impl_up(rotation_range);
+        rotation_range *= 0.2f;
     }
+}
+
+void renderer::search_impl_up(const float rotation_range_deg)
+{
+    auto best_cam = cam;
+    const auto initial_cam = cam;
+    float best_result = 0.f;
+
+    constexpr int steps = 20;
+    const float angle = rotation_range_deg / steps;
+    const vec3 eye    = initial_cam.eye();
+    const vec3 center = initial_cam.center();
+    const vec3 dir = eye - center;
+    const vec3 n = normalize(dir);
+    for (int i=0; i<steps; ++i)
+    {
+        constexpr double pi = M_PI;
+        const float cos_a = cos((i * angle - rotation_range_deg / 2) / 360 * 2 * pi);
+        const float sin_a = sin((i * angle - rotation_range_deg / 2) / 360 * 2 * pi);
+        mat3f rotation_matrix
+        {
+            n.x * n.x * (1 - cos_a) +       cos_a,    n.x * n.y * (1 - cos_a) - n.z * sin_a,    n.x * n.z * (1 - cos_a) + n.y * sin_a,
+            n.y * n.x * (1 - cos_a) + n.z * sin_a,    n.y * n.y * (1 - cos_a) +       cos_a,    n.y * n.z * (1 - cos_a) + n.x * sin_a,
+            n.z * n.x * (1 - cos_a) - n.y * sin_a,    n.z * n.y * (1 - cos_a) + n.x * sin_a,    n.z * n.z * (1 - cos_a) +       cos_a
+        };
+        vec3 up = rotation_matrix * initial_cam.up();
+
+        cam.look_at(eye, center, up);
+        on_display();
+        auto current_result = match();
+        if (current_result > best_result)
+        {
+            best_result = current_result;
+            best_cam = cam;
+        }
+    }
+    cam = best_cam;
+    std::cout << " up:     " << best_result << "\n";
 }
 
 void renderer::search_impl(const search_mode mode, const int grid_size, const float search_distance)
@@ -295,13 +320,6 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
                     center.z = center.z - search_distance + (z * step_size);
                     break;
                 }
-//                case search_mode::up:
-//                {
-//                    up.x = up.x - search_distance + (x * step_size);
-//                    up.y = up.y - search_distance + (y * step_size);
-//                    up.z = up.z - search_distance + (z * step_size);
-//                    break;
-//                }
                 }
                 cam.look_at(eye, center, up);
                 on_display();
@@ -319,7 +337,19 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
 //        std::cout.flush();
     }
     cam = best_cam;
-    std::cout << " best value: " << best_result << "\n";
+    switch (mode)
+    {
+    case search_mode::eye:
+    {
+        std::cout << " eye:    " << best_result << "\n";
+        break;
+    }
+    case search_mode::center:
+    {
+        std::cout << " center: " << best_result << "\n";
+        break;
+    }
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
