@@ -49,6 +49,7 @@
 #include <virvo/vvtextureutil.h>
 
 #include "host_device_rt.h"
+#include "match_result.h"
 #include "render.h"
 
 using namespace visionaray;
@@ -166,7 +167,7 @@ struct renderer : viewer_type
     void load_volume();
     void load_reference_image();
     void update_reference_image();
-    float match();
+    match_result match();
     void search();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
@@ -237,8 +238,8 @@ void renderer::search()
     {
         std::cout << "Iteration " << iteration << " of " << iterations << ":\n";
         // eye
-        search_impl(search_mode::eye, grid_size, eye_search_distance);
-        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
+//        search_impl(search_mode::eye, grid_size, eye_search_distance);
+//        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
 //        // center
 //        search_impl(search_mode::center, grid_size, center_search_distance);
 //        center_search_distance = center_search_distance * 3 / grid_size * relax;
@@ -252,7 +253,7 @@ void renderer::search_impl_up(const float rotation_range_deg)
 {
     auto best_cam = cam;
     const auto initial_cam = cam;
-    float best_result = 0.f;
+    match_result best_result;
 
     constexpr int steps = 20;
     const float angle = rotation_range_deg / steps;
@@ -275,15 +276,16 @@ void renderer::search_impl_up(const float rotation_range_deg)
 
         cam.look_at(eye, center, up);
         on_display();
-        auto current_result = match();
-        if (current_result > best_result)
+        const auto current_result = match();
+        //if (current_result > best_result)
+        if (current_result.match_ratio() > best_result.match_ratio())
         {
             best_result = current_result;
             best_cam = cam;
         }
     }
     cam = best_cam;
-    std::cout << " up:     " << best_result << "\n";
+    std::cout << " up:     " << best_result.match_ratio() << "\n";
 }
 
 void renderer::search_impl(const search_mode mode, const int grid_size, const float search_distance)
@@ -292,7 +294,7 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
 
     auto best_cam = cam;
     const auto initial_cam = cam;
-    float best_result = 0.f;
+    match_result best_result;
 
     float progress = 0;
     for (int x = 0; x < grid_size; ++x)
@@ -323,7 +325,7 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
                 }
                 cam.look_at(eye, center, up);
                 on_display();
-                auto current_result = match();
+                const auto current_result = match();
                 if (current_result > best_result)
                 {
                     best_result = current_result;
@@ -341,12 +343,12 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
     {
     case search_mode::eye:
     {
-        std::cout << " eye:    " << best_result << "\n";
+        std::cout << " eye:    " << best_result.match_ratio() << "\n";
         break;
     }
     case search_mode::center:
     {
-        std::cout << " center: " << best_result << "\n";
+        std::cout << " center: " << best_result.match_ratio() << "\n";
         break;
     }
     }
@@ -608,43 +610,30 @@ void renderer::update_reference_image()
     matcher_initialized = true;
 }
 
-float renderer::match()
+match_result renderer::match()
 {
-    if (!matcher_initialized) return 0;
+    if (!matcher_initialized) return {};
 
+    // get current image
     auto current_image_std = get_current_image();
     auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
 
+    // detect
     std::vector<cv::KeyPoint> current_keypoints;
     cv::Mat current_descriptors;
     orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
-    //std::cout << "Found " << current_descriptors.size() << " descriptors.\n";
-    std::vector<cv::DMatch> matches;
-    matcher->match(current_descriptors, matches, cv::noArray());
-    //std::cout << "Found " << matches.size() << " matches.\n";
-    float match_ratio = (float)matches.size() / reference_descriptors.size().height;
-//    std::vector<cv::DMatch> good_matches;
-//    for (auto& m : matches)
-//    {
-//        if (m.distance < 70)
-//            good_matches.push_back(m);
-//    }
-//    float good_match_ratio = (float)good_matches.size() / reference_descriptors.size().height;
-    //std::sort(matches.begin(), matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){ return lhs.distance < rhs.distance;});
-//    float distance = 0.f;
-//    for (auto& m : matches)
-//    {
-//        distance += m.distance;
-//        //std::cout << m.distance << "\n";
-//    }
-    //std::cout << "Match ratio: " << match_ratio << "\t Average distance: " << distance/matches.size() << "\n";
-    //std::cout << "total match distance: " << distance << "\n";
+
+    // match
+    match_result result;
+    matcher->match(current_descriptors, result.matches, cv::noArray());
+    result.num_ref_descriptors = reference_descriptors.size().height;
+
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
 //    cv::Mat img;
 //    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
 //    cv::imshow("Display Image", img);
 //    cv::waitKey(0);
-    return match_ratio;
+    return result;
 }
 
 //-------------------------------------------------------------------------------------------------
