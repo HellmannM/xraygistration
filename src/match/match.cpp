@@ -85,16 +85,16 @@ struct renderer : viewer_type
         , delta(0.01f)
         , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
-        , orb(cv::ORB::create(
-                /*int nfeatures     */ 5000,
-                /*float scaleFactor */ 1.2f,
-                /*int nlevels       */ 8,
-                /*int edgeThreshold */ 31,
-                /*int firstLevel    */ 0,
-                /*int WTA_K         */ 2,
-                /*int scoreType     */ cv::ORB::HARRIS_SCORE,
-                /*int patchSize     */ 31,
-                /*int fastThreshold */ 15
+        , orb(cv::ORB::create(                                  // default values
+                /*int nfeatures     */ 5000,                    // 500
+                /*float scaleFactor */ 1.1f,                    // 1.2f
+                /*int nlevels       */ 15,                       // 8
+                /*int edgeThreshold */ 71,                      // 31
+                /*int firstLevel    */ 0,                       // 0
+                /*int WTA_K         */ 2,                       // 2
+                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
+                /*int patchSize     */ 71,                      // 31
+                /*int fastThreshold */ 20                       // 20
           ))
         , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
         , matcher_initialized(false)
@@ -167,7 +167,7 @@ struct renderer : viewer_type
     void load_volume();
     void load_reference_image();
     void update_reference_image();
-    match_result match();
+    match_result_t match();
     void search();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
@@ -228,24 +228,24 @@ void renderer::search()
 {
     constexpr float relax = 1.1f; // modify search_distance slightly to avoid reusing exact same points.
     constexpr int grid_size = 7;
-    constexpr int iterations = 7;
+    constexpr int iterations = 5;
 
     // intertwined
     float eye_search_distance = cam.distance() * 0.2f;
     float center_search_distance = length(bbox.size()) * 0.2f;
-    float rotation_range = 360.f;
+    float rotation_range = 90.f;
     for (int iteration = 1; iteration <= iterations; ++iteration)
     {
         std::cout << "Iteration " << iteration << " of " << iterations << ":\n";
         // eye
-//        search_impl(search_mode::eye, grid_size, eye_search_distance);
-//        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
-//        // center
-//        search_impl(search_mode::center, grid_size, center_search_distance);
-//        center_search_distance = center_search_distance * 3 / grid_size * relax;
+        search_impl(search_mode::eye, grid_size, eye_search_distance);
+        eye_search_distance = eye_search_distance * 3 / grid_size * relax;
+        // center
+        search_impl(search_mode::center, grid_size, center_search_distance);
+        center_search_distance = center_search_distance * 3 / grid_size * relax;
         // up
         search_impl_up(rotation_range);
-        rotation_range *= 0.2f;
+        rotation_range *= 0.5f;
     }
 }
 
@@ -253,9 +253,10 @@ void renderer::search_impl_up(const float rotation_range_deg)
 {
     auto best_cam = cam;
     const auto initial_cam = cam;
-    match_result best_result;
+    // start with current camera
+    auto best_result = match();
 
-    constexpr int steps = 20;
+    constexpr int steps = 40;
     const float angle = rotation_range_deg / steps;
     const vec3 eye    = initial_cam.eye();
     const vec3 center = initial_cam.center();
@@ -277,8 +278,8 @@ void renderer::search_impl_up(const float rotation_range_deg)
         cam.look_at(eye, center, up);
         on_display();
         const auto current_result = match();
-        //if (current_result > best_result)
-        if (current_result.match_ratio() > best_result.match_ratio())
+        if (current_result > best_result)
+        //if (current_result.match_ratio() > best_result.match_ratio())
         {
             best_result = current_result;
             best_cam = cam;
@@ -294,7 +295,7 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
 
     auto best_cam = cam;
     const auto initial_cam = cam;
-    match_result best_result;
+    match_result_t best_result;
 
     float progress = 0;
     for (int x = 0; x < grid_size; ++x)
@@ -610,7 +611,7 @@ void renderer::update_reference_image()
     matcher_initialized = true;
 }
 
-match_result renderer::match()
+match_result_t renderer::match()
 {
     if (!matcher_initialized) return {};
 
@@ -624,13 +625,13 @@ match_result renderer::match()
     orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
 
     // match
-    match_result result;
+    match_result_t result;
     matcher->match(current_descriptors, result.matches, cv::noArray());
     result.num_ref_descriptors = reference_descriptors.size().height;
 
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
 //    cv::Mat img;
-//    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, matches, img);
+//    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
 //    cv::imshow("Display Image", img);
 //    cv::waitKey(0);
     return result;

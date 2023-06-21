@@ -1,8 +1,9 @@
+#include <limits>
 #include <vector>
 
 #include <opencv2/opencv.hpp>
 
-struct match_result
+struct match_result_t
 {
     static constexpr float match_ratio_compare_offset {0.005f};
     static constexpr float good_match_threshold {70.f};
@@ -10,19 +11,19 @@ struct match_result
     uint32_t num_ref_descriptors;
     std::vector<cv::DMatch> matches;
 
-    match_result() = default;
+    match_result_t() = default;
 
-    match_result(const match_result& rhs)
+    match_result_t(const match_result_t& rhs)
     : num_ref_descriptors(rhs.num_ref_descriptors), matches(rhs.matches) {}
 
-    void operator=(const match_result& rhs)
+    void operator=(const match_result_t& rhs)
     {
         num_ref_descriptors = rhs.num_ref_descriptors;
         matches = rhs.matches;
     }
 
     // "smart" comparator: compare match_ratio if significantly different, otherwise compare good_distance (if match_ratio is similar).
-    bool operator<(const match_result& rhs) const
+    bool operator<(const match_result_t& rhs) const
     {
         if (match_ratio() + match_ratio_compare_offset < rhs.match_ratio())
             return true;
@@ -33,7 +34,7 @@ struct match_result
     }
 
     // "smart" comparator: compare match_ratio if significantly different, otherwise compare good_distance (if match_ratio is similar).
-    bool operator>(const match_result& rhs) const
+    bool operator>(const match_result_t& rhs) const
     {
         if (match_ratio() + match_ratio_compare_offset > rhs.match_ratio())
             return true;
@@ -52,6 +53,8 @@ struct match_result
 
     float distance() const
     {
+        if (matches.empty())
+            return std::numeric_limits<float>::max();
         float dist = 0.f;
         for (auto& m : matches)
         {
