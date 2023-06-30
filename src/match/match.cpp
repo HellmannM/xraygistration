@@ -14,6 +14,9 @@
 
 // OpenCV includes
 #include <opencv2/opencv.hpp>
+#include <opencv2/cudaimgproc.hpp> // cvt::cuda::cvtColor
+#include <opencv2/imgproc.hpp> // cv::cvtColor
+#include <opencv2/cudafeatures2d.hpp> // cv::cuda::ORB
 #include <opencv2/core/mat.hpp> // cv::Mat
 #include <opencv2/features2d.hpp> // cv::ORB
 
@@ -85,16 +88,16 @@ struct renderer : viewer_type
         , delta(0.01f)
         , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
-        , orb(cv::ORB::create(                                  // default values
-                /*int nfeatures     */ 5000,                    // 500
-                /*float scaleFactor */ 1.1f,                    // 1.2f
-                /*int nlevels       */ 15,                       // 8
-                /*int edgeThreshold */ 71,                      // 31
-                /*int firstLevel    */ 0,                       // 0
-                /*int WTA_K         */ 2,                       // 2
-                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
-                /*int patchSize     */ 71,                      // 31
-                /*int fastThreshold */ 20                       // 20
+        , orb(cv::cuda::ORB::create(                                  // default values
+//                /*int nfeatures     */ 5000,                    // 500
+//                /*float scaleFactor */ 1.1f,                    // 1.2f
+//                /*int nlevels       */ 15,                       // 8
+//                /*int edgeThreshold */ 51,                      // 31
+//                /*int firstLevel    */ 0,                       // 0
+//                /*int WTA_K         */ 2,                       // 2
+//                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
+//                /*int patchSize     */ 51,                      // 31
+//                /*int fastThreshold */ 20                       // 20
           ))
         , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
         , matcher_initialized(false)
@@ -155,7 +158,7 @@ struct renderer : viewer_type
     vec3                                                bgcolor;
     vec2f                                               value_range;
 
-    cv::Ptr<cv::ORB>                                    orb;
+    cv::Ptr<cv::cuda::ORB>                                    orb;
     cv::Ptr<cv::BFMatcher>                              matcher;
     bool                                                matcher_initialized;
     std::vector<vector<4, unorm<8>>>                    reference_image_std;
@@ -163,6 +166,9 @@ struct renderer : viewer_type
     cv::Mat                                             reference_image;
     cv::Mat                                             reference_descriptors;
     std::vector<cv::KeyPoint>                           reference_keypoints;
+    //GPU
+    cv::cuda::GpuMat                                    reference_image_gpu;
+    cv::cuda::GpuMat                                    reference_descriptors_gpu;
 
     void load_volume();
     void load_reference_image();
@@ -563,6 +569,7 @@ void renderer::load_reference_image()
     if (reference_image_filename.empty())
     {
         std::cout << "No reference image file provided.\n";
+        return;
     }
     std::cout << "Loading reference image file: " << reference_image_filename << "\n";
     visionaray::image img;
@@ -586,12 +593,23 @@ void renderer::load_reference_image()
     //memcpy(reference_image_std2.data(), img.data(), img.width() * img.height() * bpp);
     reference_image = cv::Mat(img.height(), img.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std2.data()));
 
+    //GPU
+    cv::Mat reference_image_gray;
+    cv::cvtColor(reference_image, reference_image_gray, cv::COLOR_RGBA2GRAY);
+    reference_image_gpu.upload(reference_image_gray);
+
     reference_keypoints.clear();
-    orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    //CPU
+    //orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    //GPU
+    orb->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
     std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
 
     matcher->clear();
-    matcher->add(reference_descriptors);
+    //CPU
+    //matcher->add(reference_descriptors);
+    //GPU
+    matcher->add(reference_descriptors_gpu);
 
     matcher_initialized = true;
 }
@@ -601,12 +619,35 @@ void renderer::update_reference_image()
     reference_image_std = get_current_image();
     reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
 
+    //GPU
+    cv::cuda::GpuMat reference_image_gpu_color(reference_image);
+    cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
+
     reference_keypoints.clear();
-    orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    //CPU
+    //orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+    //GPU
+    //TODO DEBUG
+    //cuda_gpu_mat.cpp:152: error: (-215:Assertion failed) 0 <= roi.x && 0 <= roi.width && roi.x + roi.width <= m.cols && 0 <= roi.y && 0 <= roi.height && roi.y + roi.height <= m.rows in function 'GpuMat'
+    cv::cuda::GpuMat keypoints, descriptors;
+    std::vector<cv::KeyPoint> keypoints_cpu;
+    orb->detect(reference_image_gpu, keypoints, cv::noArray());
+    std::cout << "detect" << std::endl;
+    orb->compute(reference_image_gpu, keypoints, descriptors);
+    std::cout << "compute" << std::endl;
+    orb->convert(keypoints, keypoints_cpu);
+    std::cout << "convert" << std::endl;
+
+
+
+    orb->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
     std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
 
     matcher->clear();
-    matcher->add(reference_descriptors);
+    //CPU
+    //matcher->add(reference_descriptors);
+    //GPU
+    matcher->add(reference_descriptors_gpu);
 
     matcher_initialized = true;
 }
@@ -622,11 +663,24 @@ match_result_t renderer::match()
     // detect
     std::vector<cv::KeyPoint> current_keypoints;
     cv::Mat current_descriptors;
-    orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
+    cv::cuda::GpuMat current_descriptors_gpu;
+
+    cv::Mat current_image_gray;
+    cv::cvtColor(current_image, current_image_gray, cv::COLOR_RGBA2GRAY);
+    cv::cuda::GpuMat current_image_gpu;
+    current_image_gpu.upload(current_image_gray);
+
+    //GPU
+    orb->detectAndCompute(current_image_gpu, cv::noArray(), current_keypoints, current_descriptors_gpu);
+    //CPU
+    //orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
 
     // match
     match_result_t result;
-    matcher->match(current_descriptors, result.matches, cv::noArray());
+    //GPU
+    matcher->match(current_descriptors_gpu, result.matches, cv::noArray());
+    //CPU
+    //matcher->match(current_descriptors, result.matches, cv::noArray());
     result.num_ref_descriptors = reference_descriptors.size().height;
 
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
