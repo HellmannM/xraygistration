@@ -60,6 +60,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 set(MATCH_HEADERS
     host_device_rt.h
     match_result.h
+    orb_matcher.h
     render.h
     timer.h
 )

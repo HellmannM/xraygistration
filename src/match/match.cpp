@@ -53,6 +53,7 @@
 
 #include "host_device_rt.h"
 #include "match_result.h"
+#include "orb_matcher.h"
 #include "render.h"
 #include "timer.h"
 
@@ -89,21 +90,7 @@ struct renderer : viewer_type
         , delta(0.01f)
         , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
-        , orb(cv::ORB::create(                                  // default values
-                /*int nfeatures     */ 5000,                    // 500
-                /*float scaleFactor */ 1.1f,                    // 1.2f
-                /*int nlevels       */ 15,                       // 8
-                /*int edgeThreshold */ 51,                      // 31
-                /*int firstLevel    */ 0,                       // 0
-                /*int WTA_K         */ 2,                       // 2
-                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
-                /*int patchSize     */ 51,                      // 31
-                /*int fastThreshold */ 20                       // 20
-          ))
-        , orb_gpu(cv::cuda::ORB::create())
-        , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
-        , matcher_gpu(cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING))
-        , matcher_initialized(false)
+        , matcher()
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -136,7 +123,6 @@ struct renderer : viewer_type
             support::cl::init(rt.mode())
             ) );
 #endif
-
     }
 
     aabb                                                bbox;
@@ -161,21 +147,7 @@ struct renderer : viewer_type
     vec3                                                bgcolor;
     vec2f                                               value_range;
 
-    cv::Ptr<cv::ORB>                                    orb;
-    cv::Ptr<cv::BFMatcher>                              matcher;
-    bool                                                matcher_initialized;
-    std::vector<vector<4, unorm<8>>>                    reference_image_std;
-    std::vector<uint8_t>                                reference_image_std2;
-    cv::Mat                                             reference_image;
-    cv::Mat                                             reference_descriptors;
-    std::vector<cv::KeyPoint>                           reference_keypoints;
-#if VSNRAY_COMMON_HAVE_CUDA
-    cv::Ptr<cv::cuda::ORB>                              orb_gpu;
-    cv::Ptr<cv::cuda::DescriptorMatcher>                matcher_gpu;
-    cv::cuda::GpuMat                                    reference_image_gpu;
-    cv::cuda::GpuMat                                    reference_descriptors_gpu;
-    bool                                                matcher_gpu_initialized;
-#endif
+    orb_matcher                                         matcher;
 
     void load_volume();
     void load_reference_image();
@@ -408,11 +380,13 @@ void renderer::on_key_press(key_event const& event)
         {
             std::cout << "Switching to GPU.\n";
             rt.mode() = host_device_rt::GPU;
+            matcher.mode = orb_matcher::matcher_mode::GPU;
         }
         else
         {
             std::cout << "Switching to CPU.\n";
             rt.mode() = host_device_rt::CPU;
+            matcher.mode = orb_matcher::matcher_mode::CPU;
         }
 #endif
         break;
@@ -576,65 +550,23 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
 
 void renderer::load_reference_image()
 {
-    if (reference_image_filename.empty())
+    int width, height;
+    if (matcher.load_reference_image(reference_image_filename, width, height))
     {
-        std::cout << "No reference image file provided.\n";
-        return;
+        on_resize(width, height);
     }
-    std::cout << "Loading reference image file: " << reference_image_filename << "\n";
-    visionaray::image img;
-    img.load(reference_image_filename);
-    std::cout << "width=" << img.width() << " height=" << img.height() << " pf=" << img.format() << "\n";
-    on_resize(img.width(), img.height());
-
-    int bpp = 4; //TODO
-    reference_image_std2.clear();
-    reference_image_std2.resize(img.width() * img.height() * bpp);
-    for (size_t y=0; y<img.height(); ++y)
-    {
-        for (size_t x=0; x<img.width(); ++x)
-        {
-            reference_image_std2[4*((img.height() - y - 1)*img.width() + x)    ] = img.data()[4*(y*img.width() + x)];
-            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 1] = img.data()[4*(y*img.width() + x) + 1];
-            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 2] = img.data()[4*(y*img.width() + x) + 2];
-            reference_image_std2[4*((img.height() - y - 1)*img.width() + x) + 3] = img.data()[4*(y*img.width() + x) + 3];
-        }
-    }
-    //memcpy(reference_image_std2.data(), img.data(), img.width() * img.height() * bpp);
-    reference_image = cv::Mat(img.height(), img.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std2.data()));
-
-    update_reference_image(reference_image);
 }
 
 void renderer::update_reference_image()
 {
-    reference_image_std = get_current_image();
-    reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
+    auto reference_image_std = get_current_image();
+    const auto reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
     update_reference_image(reference_image);
 }
 
 void renderer::update_reference_image(const cv::Mat& image)
 {
-    reference_keypoints.clear();
-    if (rt.mode() == host_device_rt::CPU)
-    {
-        orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
-        matcher->clear();
-        matcher->add(reference_descriptors);
-        matcher_initialized = true;
-    }
-#if VSNRAY_COMMON_HAVE_CUDA
-    else if (rt.mode() == host_device_rt::GPU)
-    {
-        cv::cuda::GpuMat reference_image_gpu_color(reference_image);
-        cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
-        orb_gpu->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
-        matcher_gpu->clear();
-        matcher_gpu->add({reference_descriptors_gpu});
-        matcher_gpu_initialized = true;
-    }
-#endif
-    std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
+    matcher.init(image);
 }
 
 match_result_t renderer::match()
@@ -643,36 +575,7 @@ match_result_t renderer::match()
     auto current_image_std = get_current_image();
     auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
 
-    std::vector<cv::KeyPoint> current_keypoints;
-    match_result_t result;
-
-    if (rt.mode() == host_device_rt::CPU)
-    {
-        if (!matcher_initialized) return {};
-        cv::Mat current_descriptors;
-        orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
-        matcher->match(current_descriptors, result.matches, cv::noArray());
-    }
-#if VSNRAY_COMMON_HAVE_CUDA
-    else if (rt.mode() == host_device_rt::GPU)
-    {
-        if (!matcher_gpu_initialized) return {};
-        cv::cuda::GpuMat current_descriptors_gpu;
-        cv::cuda::GpuMat current_image_gpu_color(current_image);
-        cv::cuda::GpuMat current_image_gpu;
-        cv::cuda::cvtColor(current_image_gpu_color, current_image_gpu, cv::COLOR_RGBA2GRAY);
-        orb_gpu->detectAndCompute(current_image_gpu, cv::noArray(), current_keypoints, current_descriptors_gpu);
-        matcher_gpu->match(current_descriptors_gpu, result.matches);
-    }
-#endif
-    result.num_ref_descriptors = reference_descriptors.size().height;
-
-//    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
-//    cv::Mat img;
-//    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
-//    cv::imshow("Display Image", img);
-//    cv::waitKey(0);
-    return result;
+    return matcher.match(current_image);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -693,6 +596,9 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     rend.load_volume();
+
+    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
+                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
     rend.load_reference_image();
 
     float aspect = rend.width() / static_cast<float>(rend.height());
