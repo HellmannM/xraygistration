@@ -54,6 +54,7 @@
 #include "host_device_rt.h"
 #include "match_result.h"
 #include "render.h"
+#include "timer.h"
 
 using namespace visionaray;
 using viewer_type   = viewer_glut;
@@ -168,15 +169,18 @@ struct renderer : viewer_type
     cv::Mat                                             reference_image;
     cv::Mat                                             reference_descriptors;
     std::vector<cv::KeyPoint>                           reference_keypoints;
-    //GPU
+#if VSNRAY_COMMON_HAVE_CUDA
     cv::Ptr<cv::cuda::ORB>                              orb_gpu;
     cv::Ptr<cv::cuda::DescriptorMatcher>                matcher_gpu;
     cv::cuda::GpuMat                                    reference_image_gpu;
     cv::cuda::GpuMat                                    reference_descriptors_gpu;
+    bool                                                matcher_gpu_initialized;
+#endif
 
     void load_volume();
     void load_reference_image();
     void update_reference_image();
+    void update_reference_image(const cv::Mat& image);
     match_result_t match();
     void search();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
@@ -246,6 +250,7 @@ void renderer::search()
     float rotation_range = 90.f;
     for (int iteration = 1; iteration <= iterations; ++iteration)
     {
+        timer t;
         std::cout << "Iteration " << iteration << " of " << iterations << ":\n";
         // eye
         search_impl(search_mode::eye, grid_size, eye_search_distance);
@@ -256,6 +261,7 @@ void renderer::search()
         // up
         search_impl_up(rotation_range);
         rotation_range *= 0.5f;
+        std::cout << t.elapsed() << "ms\n";
     }
 }
 
@@ -597,77 +603,68 @@ void renderer::load_reference_image()
     //memcpy(reference_image_std2.data(), img.data(), img.width() * img.height() * bpp);
     reference_image = cv::Mat(img.height(), img.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std2.data()));
 
-    reference_keypoints.clear();
-    //CPU
-    //orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
-    //GPU
-    cv::cuda::GpuMat reference_image_gpu_color(reference_image);
-    cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
-    orb_gpu->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
-    std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
-
-    matcher->clear();
-    //CPU
-    //matcher->add(reference_descriptors);
-    //GPU
-    matcher_gpu->add({reference_descriptors_gpu});
-
-    matcher_initialized = true;
+    update_reference_image(reference_image);
 }
 
 void renderer::update_reference_image()
 {
     reference_image_std = get_current_image();
     reference_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(reference_image_std.data()));
+    update_reference_image(reference_image);
+}
 
+void renderer::update_reference_image(const cv::Mat& image)
+{
     reference_keypoints.clear();
-    //CPU
-    //orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
-    //GPU
-    cv::cuda::GpuMat reference_image_gpu_color(reference_image);
-    cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
-    orb_gpu->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
-
-    std::cout << "Found " << reference_descriptors_gpu.size() << " descriptors.\n";
-
-
-    matcher->clear();
-    //CPU
-    //matcher->add(reference_descriptors);
-    //GPU
-    matcher_gpu->add({reference_descriptors_gpu});
-
-    matcher_initialized = true;
+    if (rt.mode() == host_device_rt::CPU)
+    {
+        orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
+        matcher->clear();
+        matcher->add(reference_descriptors);
+        matcher_initialized = true;
+    }
+#if VSNRAY_COMMON_HAVE_CUDA
+    else if (rt.mode() == host_device_rt::GPU)
+    {
+        cv::cuda::GpuMat reference_image_gpu_color(reference_image);
+        cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
+        orb_gpu->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
+        matcher_gpu->clear();
+        matcher_gpu->add({reference_descriptors_gpu});
+        matcher_gpu_initialized = true;
+    }
+#endif
+    std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
 }
 
 match_result_t renderer::match()
 {
-    if (!matcher_initialized) return {};
-
     // get current image
     auto current_image_std = get_current_image();
     auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
 
-    // detect
     std::vector<cv::KeyPoint> current_keypoints;
-    cv::Mat                   current_descriptors;
-    cv::cuda::GpuMat          current_descriptors_gpu;
-
-    cv::cuda::GpuMat current_image_gpu_color(current_image);
-    cv::cuda::GpuMat current_image_gpu;
-    cv::cuda::cvtColor(current_image_gpu_color, current_image_gpu, cv::COLOR_RGBA2GRAY);
-
-    //CPU
-    //orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
-    //GPU
-    orb_gpu->detectAndCompute(current_image_gpu, cv::noArray(), current_keypoints, current_descriptors_gpu);
-
-    // match
     match_result_t result;
-    //CPU
-    //matcher->match(current_descriptors, result.matches, cv::noArray());
-    //GPU
-    matcher_gpu->match(current_descriptors_gpu, result.matches);
+
+    if (rt.mode() == host_device_rt::CPU)
+    {
+        if (!matcher_initialized) return {};
+        cv::Mat current_descriptors;
+        orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
+        matcher->match(current_descriptors, result.matches, cv::noArray());
+    }
+#if VSNRAY_COMMON_HAVE_CUDA
+    else if (rt.mode() == host_device_rt::GPU)
+    {
+        if (!matcher_gpu_initialized) return {};
+        cv::cuda::GpuMat current_descriptors_gpu;
+        cv::cuda::GpuMat current_image_gpu_color(current_image);
+        cv::cuda::GpuMat current_image_gpu;
+        cv::cuda::cvtColor(current_image_gpu_color, current_image_gpu, cv::COLOR_RGBA2GRAY);
+        orb_gpu->detectAndCompute(current_image_gpu, cv::noArray(), current_keypoints, current_descriptors_gpu);
+        matcher_gpu->match(current_descriptors_gpu, result.matches);
+    }
+#endif
     result.num_ref_descriptors = reference_descriptors.size().height;
 
 //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );

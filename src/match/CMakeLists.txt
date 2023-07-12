@@ -61,6 +61,7 @@ set(MATCH_HEADERS
     host_device_rt.h
     match_result.h
     render.h
+    timer.h
 )
 
 set(MATCH_SOURCES
