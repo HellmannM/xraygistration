@@ -380,13 +380,13 @@ void renderer::on_key_press(key_event const& event)
         {
             std::cout << "Switching to GPU.\n";
             rt.mode() = host_device_rt::GPU;
-            matcher.mode = orb_matcher::matcher_mode::GPU;
+//            matcher.mode = orb_matcher::matcher_mode::GPU;
         }
         else
         {
             std::cout << "Switching to CPU.\n";
             rt.mode() = host_device_rt::CPU;
-            matcher.mode = orb_matcher::matcher_mode::CPU;
+//            matcher.mode = orb_matcher::matcher_mode::CPU;
         }
 #endif
         break;
@@ -597,8 +597,8 @@ int main(int argc, char** argv)
     }
     rend.load_volume();
 
-    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
-                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
+//    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
+//                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
     rend.load_reference_image();
 
     float aspect = rend.width() / static_cast<float>(rend.height());

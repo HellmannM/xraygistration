@@ -18,25 +18,30 @@
 
 #include "match_result.h"
 
+
+// Switch between CPU and GPU matcher
+//TODO GPU matcher broken? Finds more matches than there are train descriptors?!
+#define USE_GPU_MATCHER 0
+
 struct orb_matcher
 {
     enum matcher_mode {CPU=0, GPU};
 
-    cv::Ptr<cv::ORB>                                    orb;
-    cv::Ptr<cv::BFMatcher>                              matcher;
-    bool                                                matcher_initialized;
-    cv::Mat                                             reference_descriptors;
+    cv::Ptr<cv::ORB>                                    cpu_orb;
+    cv::Ptr<cv::BFMatcher>                              cpu_matcher;
+    bool                                                cpu_matcher_initialized;
+    cv::Mat                                             cpu_reference_descriptors;
 #if VSNRAY_COMMON_HAVE_CUDA
-    cv::Ptr<cv::cuda::ORB>                              orb_gpu;
-    cv::Ptr<cv::cuda::DescriptorMatcher>                matcher_gpu;
-    bool                                                matcher_gpu_initialized;
-    cv::cuda::GpuMat                                    reference_descriptors_gpu;
+    cv::Ptr<cv::cuda::ORB>                              gpu_orb;
+    cv::Ptr<cv::cuda::DescriptorMatcher>                gpu_matcher;
+    bool                                                gpu_matcher_initialized;
+    cv::cuda::GpuMat                                    gpu_reference_descriptors;
 #endif
     std::vector<cv::KeyPoint>                           reference_keypoints;
     matcher_mode                                        mode;
 
     orb_matcher()
-        : orb(cv::ORB::create(                                  // default values
+        : cpu_orb(cv::ORB::create(                                  // default values
                 /*int nfeatures     */ 5000,                    // 500
                 /*float scaleFactor */ 1.1f,                    // 1.2f
                 /*int nlevels       */ 15,                       // 8
@@ -47,13 +52,13 @@ struct orb_matcher
                 /*int patchSize     */ 51,                      // 31
                 /*int fastThreshold */ 20                       // 20
           ))
-        , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
-        , matcher_initialized(false)
-        , reference_descriptors()
-        , orb_gpu(cv::cuda::ORB::create())
-        , matcher_gpu(cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING))
-        , matcher_gpu_initialized(false)
-        , reference_descriptors_gpu()
+        , cpu_matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
+        , cpu_matcher_initialized(false)
+        , cpu_reference_descriptors()
+        , gpu_orb(cv::cuda::ORB::create())
+        , gpu_matcher(cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING))
+        , gpu_matcher_initialized(false)
+        , gpu_reference_descriptors()
         , reference_keypoints()
         , mode()
         {};
@@ -98,23 +103,30 @@ struct orb_matcher
         reference_keypoints.clear();
         if (mode == matcher_mode::CPU)
         {
-            orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, reference_descriptors);
-            matcher->clear();
-            matcher->add(reference_descriptors);
-            matcher_initialized = true;
-            std::cout << "Found " << reference_descriptors.size() << " descriptors.\n";
+            cpu_orb->detectAndCompute(reference_image, cv::noArray(), reference_keypoints, cpu_reference_descriptors);
+            cpu_matcher->clear();
+            cpu_matcher->add(cpu_reference_descriptors);
+            cpu_matcher_initialized = true;
+            std::cout << "Found " << cpu_reference_descriptors.size() << " descriptors.\n";
         }
     #if VSNRAY_COMMON_HAVE_CUDA
         else if (mode == matcher_mode::GPU)
         {
-            cv::cuda::GpuMat reference_image_gpu_color(reference_image);
-            cv::cuda::GpuMat reference_image_gpu;
-            cv::cuda::cvtColor(reference_image_gpu_color, reference_image_gpu, cv::COLOR_RGBA2GRAY);
-            orb_gpu->detectAndCompute(reference_image_gpu, cv::noArray(), reference_keypoints, reference_descriptors_gpu);
-            matcher_gpu->clear();
-            matcher_gpu->add({reference_descriptors_gpu});
-            matcher_gpu_initialized = true;
-            std::cout << "Found " << reference_descriptors_gpu.size() << " descriptors.\n";
+            cv::cuda::GpuMat gpu_reference_image_color(reference_image);
+            cv::cuda::GpuMat gpu_reference_image;
+            cv::cuda::cvtColor(gpu_reference_image_color, gpu_reference_image, cv::COLOR_RGBA2GRAY);
+            gpu_orb->detectAndCompute(gpu_reference_image, cv::noArray(), reference_keypoints, gpu_reference_descriptors);
+            #if USE_GPU_MATCHER
+                gpu_matcher->clear();
+                gpu_matcher->add({gpu_reference_descriptors});
+                gpu_matcher_initialized = true;
+            #else
+                cpu_matcher->clear();
+                gpu_reference_descriptors.download(cpu_reference_descriptors);
+                cpu_matcher->add(cpu_reference_descriptors);
+                cpu_matcher_initialized = true;
+            #endif
+            std::cout << "Found " << gpu_reference_descriptors.size() << " descriptors.\n";
         }
     #endif
     }
@@ -126,27 +138,35 @@ struct orb_matcher
     
         if (mode == matcher_mode::CPU)
         {
-            if (!matcher_initialized) return {};
-            cv::Mat current_descriptors;
-            orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, current_descriptors);
-            matcher->match(current_descriptors, result.matches, cv::noArray());
-            result.num_ref_descriptors = reference_descriptors.size().height;
+            if (!cpu_matcher_initialized) return {};
+            cv::Mat cpu_current_descriptors;
+            cpu_orb->detectAndCompute(current_image, cv::noArray(), current_keypoints, cpu_current_descriptors);
+            cpu_matcher->match(cpu_current_descriptors, result.matches, cv::noArray());
+            result.num_ref_descriptors = cpu_reference_descriptors.size().height;
         }
     #if VSNRAY_COMMON_HAVE_CUDA
         else if (mode == matcher_mode::GPU)
         {
-            if (!matcher_gpu_initialized) return {};
-            cv::cuda::GpuMat current_descriptors_gpu;
-            cv::cuda::GpuMat current_image_gpu_color(current_image);
-            cv::cuda::GpuMat current_image_gpu;
-            cv::cuda::cvtColor(current_image_gpu_color, current_image_gpu, cv::COLOR_RGBA2GRAY);
-            orb_gpu->detectAndCompute(current_image_gpu, cv::noArray(), current_keypoints, current_descriptors_gpu);
-            matcher_gpu->match(current_descriptors_gpu, result.matches);
-            result.num_ref_descriptors = reference_descriptors_gpu.size().height;
+            cv::cuda::GpuMat gpu_current_descriptors;
+            cv::cuda::GpuMat gpu_current_image_color(current_image);
+            cv::cuda::GpuMat gpu_current_image;
+            cv::cuda::cvtColor(gpu_current_image_color, gpu_current_image, cv::COLOR_RGBA2GRAY);
+            gpu_orb->detectAndCompute(gpu_current_image, cv::noArray(), current_keypoints, gpu_current_descriptors);
+            #if USE_GPU_MATCHER
+                if (!gpu_matcher_initialized) return {};
+                gpu_matcher->match(gpu_current_descriptors, result.matches);
+                result.num_ref_descriptors = gpu_reference_descriptors.size().height;
+            #else
+                if (!cpu_matcher_initialized) return {};
+                cv::Mat cpu_current_descriptors;
+                gpu_current_descriptors.download(cpu_current_descriptors);
+                cpu_matcher->match(cpu_current_descriptors, result.matches, cv::noArray());
+                result.num_ref_descriptors = cpu_reference_descriptors.size().height;
+            #endif
         }
     #endif
     
-    //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE );
+    //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //    cv::Mat img;
     //    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
     //    cv::imshow("Display Image", img);
