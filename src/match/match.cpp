@@ -216,12 +216,15 @@ void renderer::on_display()
     // enable overlay when in selection mode
     if (selected_point > 0)
     {
-        // TODO red for {1,2} green for {3,4}?
-        // TODO need to offset by size/2?
         glEnable(GL_SCISSOR_TEST);
         const auto& pix = selected_pixels[selected_point - 1];
-        glScissor(pix.x, pix.y, 5, 5);
-        glClearColor(1.0, 0.0, 0.0, 1.0);
+        constexpr int dot_size = 5;
+        constexpr int offset = dot_size / 2;
+        glScissor(pix.x - offset, pix.y - offset, dot_size, dot_size);
+        const vec3f color1{1.0, 0.0, 0.0};
+        const vec3f color2{0.0, 1.0, 0.0};
+        const auto& color = selected_point > 2 ? color1 : color2;
+        glClearColor(color.x, color.y, color.z, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glDisable(GL_SCISSOR_TEST);
     }
@@ -462,13 +465,13 @@ void renderer::on_key_press(key_event const& event)
         }
         break;
 
-    //TODO accelerate with key modifier?
     case keyboard::key::ArrowUp:
         if (selected_point > 0)
         {
-            if (selected_pixels[selected_point - 1].y < rt.height())
+            const int offset = event.modifiers() == 0x00000004 ? 20 : 1;
+            if (selected_pixels[selected_point - 1].y + offset < rt.height())
             {
-                ++selected_pixels[selected_point - 1].y;
+                ++selected_pixels[selected_point - 1].y += offset;
             }
         }
         break;
@@ -476,9 +479,10 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::ArrowDown:
         if (selected_point > 0)
         {
-            if (selected_pixels[selected_point - 1].y > 0)
+            const int offset = event.modifiers() == 0x00000004 ? 20 : 1;
+            if (selected_pixels[selected_point - 1].y - offset >= 0)
             {
-                --selected_pixels[selected_point - 1].y;
+                --selected_pixels[selected_point - 1].y -= offset;
             }
         }
         break;
@@ -486,9 +490,10 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::ArrowLeft:
         if (selected_point > 0)
         {
-            if (selected_pixels[selected_point - 1].x > 0)
+            const int offset = event.modifiers() == 0x00000004 ? 20 : 1;
+            if (selected_pixels[selected_point - 1].x - offset >= 0)
             {
-                --selected_pixels[selected_point - 1].x;
+                --selected_pixels[selected_point - 1].x -= offset;
             }
         }
         break;
@@ -496,9 +501,10 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::ArrowRight:
         if (selected_point > 0)
         {
-            if (selected_pixels[selected_point - 1].x < rt.width())
+            const int offset = event.modifiers() == 0x00000004 ? 20 : 1;
+            if (selected_pixels[selected_point - 1].x + offset < rt.width())
             {
-                ++selected_pixels[selected_point - 1].x;
+                selected_pixels[selected_point - 1].x += offset;
             }
         }
         break;
