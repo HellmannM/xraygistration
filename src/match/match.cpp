@@ -91,6 +91,8 @@ struct renderer : viewer_type
         , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
         , matcher()
+        , selected_point(0)
+        , selected_pixels()
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -125,6 +127,7 @@ struct renderer : viewer_type
 #endif
     }
 
+    // volume rendering
     aabb                                                bbox;
     pinhole_camera                                      cam;
     host_device_rt                                      rt;
@@ -136,18 +139,19 @@ struct renderer : viewer_type
     cuda_volume_t                                       device_volume;
     cuda_volume_ref_t                                   device_volume_ref;
 #endif
-
     std::string                                         volume_filename;
     std::string                                         reference_image_filename;
     vvVolDesc*                                          vd;
-    // Internal storage format for textures
     virvo::PixelFormat                                  texture_format;
     float                                               delta;
     float                                               integration_coefficient;
     vec3                                                bgcolor;
     vec2f                                               value_range;
-
+    // matcher
     orb_matcher                                         matcher;
+    // pixel select
+    int                                                 selected_point;
+    vec2                                                selected_pixels[4];
 
     void load_volume();
     void load_reference_image();
@@ -208,6 +212,19 @@ void renderer::on_display()
 
     rt.swap_buffers();
     rt.display_color_buffer();
+
+    // enable overlay when in selection mode
+    if (selected_point > 0)
+    {
+        // TODO red for {1,2} green for {3,4}?
+        // TODO need to offset by size/2?
+        glEnable(GL_SCISSOR_TEST);
+        const auto& pix = selected_pixels[selected_point - 1];
+        glScissor(pix.x, pix.y, 5, 5);
+        glClearColor(1.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_SCISSOR_TEST);
+    }
 }
 
 void renderer::search()
@@ -414,6 +431,76 @@ void renderer::on_key_press(key_event const& event)
     case '-':
         integration_coefficient -= 0.0000001f;
         std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        break;
+
+    case keyboard::key::One:
+        selected_point = 1;
+        std::cout << "Pixel selection for point " << selected_point << "\n";
+        break;
+
+    case keyboard::key::Two:
+        selected_point = 2;
+        std::cout << "Pixel selection for point " << selected_point << "\n";
+        break;
+
+    case keyboard::key::Three:
+        selected_point = 3;
+        std::cout << "Pixel selection for point " << selected_point << "\n";
+        break;
+
+    case keyboard::key::Four:
+        selected_point = 4;
+        std::cout << "Pixel selection for point " << selected_point << "\n";
+        break;
+
+    case keyboard::key::Enter:
+        if (selected_point > 0)
+        {
+            std::cout << "selected point " << selected_point << ": " << selected_pixels[selected_point - 1] << "\n";
+            selected_point = 0;
+            std::cout << "Pixel selection disabled" << "\n";
+        }
+        break;
+
+    //TODO accelerate with key modifier?
+    case keyboard::key::ArrowUp:
+        if (selected_point > 0)
+        {
+            if (selected_pixels[selected_point - 1].y < rt.height())
+            {
+                ++selected_pixels[selected_point - 1].y;
+            }
+        }
+        break;
+
+    case keyboard::key::ArrowDown:
+        if (selected_point > 0)
+        {
+            if (selected_pixels[selected_point - 1].y > 0)
+            {
+                --selected_pixels[selected_point - 1].y;
+            }
+        }
+        break;
+
+    case keyboard::key::ArrowLeft:
+        if (selected_point > 0)
+        {
+            if (selected_pixels[selected_point - 1].x > 0)
+            {
+                --selected_pixels[selected_point - 1].x;
+            }
+        }
+        break;
+
+    case keyboard::key::ArrowRight:
+        if (selected_point > 0)
+        {
+            if (selected_pixels[selected_point - 1].x < rt.width())
+            {
+                ++selected_pixels[selected_point - 1].x;
+            }
+        }
         break;
 
     default:
