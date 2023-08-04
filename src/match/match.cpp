@@ -152,6 +152,8 @@ struct renderer : viewer_type
     // pixel select
     int                                                 selected_point;
     vec2                                                selected_pixels[4];
+    pinhole_camera                                      saved_cameras[2];
+    ray_type_cpu                                        saved_rays[4];
 
     void load_volume();
     void load_reference_image();
@@ -436,6 +438,16 @@ void renderer::on_key_press(key_event const& event)
         std::cout << "Integration coefficient = " << integration_coefficient << "\n";
         break;
 
+    case keyboard::key::F1:
+        std::cout << "Saved current cam 1." << "\n";
+        saved_cameras[0] = cam;
+        break;
+
+    case keyboard::key::F2:
+        std::cout << "Saved current cam 2." << "\n";
+        saved_cameras[1] = cam;
+        break;
+
     case keyboard::key::One:
         selected_point = 1;
         std::cout << "Pixel selection for point " << selected_point << "\n";
@@ -454,15 +466,6 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::Four:
         selected_point = 4;
         std::cout << "Pixel selection for point " << selected_point << "\n";
-        break;
-
-    case keyboard::key::Enter:
-        if (selected_point > 0)
-        {
-            std::cout << "selected point " << selected_point << ": " << selected_pixels[selected_point - 1] << "\n";
-            selected_point = 0;
-            std::cout << "Pixel selection disabled" << "\n";
-        }
         break;
 
     case keyboard::key::ArrowUp:
@@ -506,6 +509,21 @@ void renderer::on_key_press(key_event const& event)
             {
                 selected_pixels[selected_point - 1].x += offset;
             }
+        }
+        break;
+
+    case keyboard::key::Enter:
+        if (selected_point > 0)
+        {
+            std::cout << "Selected point " << selected_point << ": " << selected_pixels[selected_point - 1] << "\n";
+            const auto c = saved_cameras[(selected_point - 1) / 2];
+            const auto viewport = c.get_viewport();
+            const auto pix = selected_pixels[selected_point - 1];
+            saved_rays[selected_point - 1] = c.primary_ray(ray_type_cpu(), pix.x, pix.y, (float)viewport.w, (float)viewport.h);
+            std::cout << "Saved ray " << selected_point
+                << ": ori" << saved_rays[selected_point - 1].ori
+                << " dir"  << saved_rays[selected_point - 1].dir << "\n";
+            selected_point = 0;
         }
         break;
 
