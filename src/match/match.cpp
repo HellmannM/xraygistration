@@ -164,6 +164,7 @@ struct renderer : viewer_type
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
     std::vector<vector<4, unorm<8>>> get_current_image();
+    std::pair<vec3, vec3> find_closest_points(ray_type_cpu r1, ray_type_cpu r2);
 protected:
 
     void on_display();
@@ -516,10 +517,12 @@ void renderer::on_key_press(key_event const& event)
         if (selected_point > 0)
         {
             std::cout << "Selected point " << selected_point << ": " << selected_pixels[selected_point - 1] << "\n";
-            const auto c = saved_cameras[(selected_point - 1) / 2];
-            const auto viewport = c.get_viewport();
-            const auto pix = selected_pixels[selected_point - 1];
+            auto c = saved_cameras[(selected_point - 1) / 2];
+            auto viewport = c.get_viewport();
+            auto pix = selected_pixels[selected_point - 1];
+            c.begin_frame();
             saved_rays[selected_point - 1] = c.primary_ray(ray_type_cpu(), pix.x, pix.y, (float)viewport.w, (float)viewport.h);
+            c.end_frame();
             std::cout << "Saved ray " << selected_point
                 << ": ori" << saved_rays[selected_point - 1].ori
                 << " dir"  << saved_rays[selected_point - 1].dir << "\n";
@@ -687,6 +690,16 @@ match_result_t renderer::match()
     auto current_image = cv::Mat(rt.height(), rt.width(), CV_8UC4, reinterpret_cast<void*>(current_image_std.data()));
 
     return matcher.match(current_image);
+}
+
+std::pair<vec3, vec3> renderer::find_closest_points(ray_type_cpu r1, ray_type_cpu r2)
+{
+    vec3 n  = cross(r1.dir, r2.dir);
+    vec3 n1 = cross(r1.dir, n);
+    vec3 n2 = cross(r2.dir, n);
+    vec3 p1 = (dot(r1.ori, n1) - dot(r2.ori, n1)) / dot(r2.dir, n1) * r2.dir + r2.ori;
+    vec3 p2 = (dot(r2.ori, n2) - dot(r1.ori, n2)) / dot(r1.dir, n2) * r1.dir + r1.ori;
+    return std::make_pair(p1, p2);
 }
 
 //-------------------------------------------------------------------------------------------------
