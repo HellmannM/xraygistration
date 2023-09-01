@@ -161,6 +161,7 @@ struct renderer : viewer_type
     void update_reference_image(const cv::Mat& image);
     match_result_t match();
     void search();
+    void search2();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
     std::vector<vector<4, unorm<8>>> get_current_image();
@@ -234,6 +235,22 @@ void renderer::on_display()
 }
 
 void renderer::search()
+{
+    auto match_result = match();
+    //TODO filter matches with cross-check or ratio test.
+    auto good_matches = match_result.good_matches();
+    std::vector<cv::Point2f> reference_points(good_matches.size());
+    std::vector<cv::Point2f> query_points(good_matches.size());
+    for (auto& m : good_matches)
+    {
+        reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
+        query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
+    }
+
+    auto homography = cv::findHomography(query_points, reference_points, cv::RANSAC);
+}
+
+void renderer::search2()
 {
     constexpr float relax = 1.1f; // modify search_distance slightly to avoid reusing exact same points.
     constexpr int grid_size = 7;

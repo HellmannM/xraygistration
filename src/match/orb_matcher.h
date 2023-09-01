@@ -165,6 +165,8 @@ struct orb_matcher
             #endif
         }
     #endif
+        result.reference_keypoints = reference_keypoints;
+        result.query_keypoints = current_keypoints;
     
     //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
     //    cv::Mat img;

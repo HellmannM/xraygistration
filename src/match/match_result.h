@@ -12,17 +12,8 @@ struct match_result_t
 
     uint32_t num_ref_descriptors;
     std::vector<cv::DMatch> matches;
-
-    match_result_t() = default;
-
-    match_result_t(const match_result_t& rhs)
-    : num_ref_descriptors(rhs.num_ref_descriptors), matches(rhs.matches) {}
-
-    void operator=(const match_result_t& rhs)
-    {
-        num_ref_descriptors = rhs.num_ref_descriptors;
-        matches = rhs.matches;
-    }
+    std::vector<cv::KeyPoint> reference_keypoints;
+    std::vector<cv::KeyPoint> query_keypoints;
 
     // "smart" comparator: compare match_ratio if significantly different, otherwise compare good_distance (if match_ratio is similar).
     bool operator<(const match_result_t& rhs) const
