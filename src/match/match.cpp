@@ -239,15 +239,40 @@ void renderer::search()
     auto match_result = match();
     //TODO filter matches with cross-check or ratio test.
     auto good_matches = match_result.good_matches();
-    std::vector<cv::Point2f> reference_points(good_matches.size());
-    std::vector<cv::Point2f> query_points(good_matches.size());
+    std::vector<cv::Point2f> reference_points;
+    std::vector<cv::Point2f> query_points;
     for (auto& m : good_matches)
     {
         reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
         query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
     }
 
-    auto homography = cv::findHomography(query_points, reference_points, cv::RANSAC);
+    //auto homography = cv::findHomography(query_points, reference_points, cv::RANSAC);
+
+    // distance estimation: assume (tnear+tfar)/2 for now
+    std::vector<cv::Point3f> reference_coords;
+    auto camera = cam;
+    const auto viewport = cam.get_viewport();
+    cam.begin_frame();
+    for (auto& p : reference_points)
+    {
+        auto r = cam.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
+        auto hr = intersect(r, bbox);
+        auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
+        reference_coords.push_back({coord.x, coord.y, coord.z});
+    }
+    cam.end_frame();
+
+    const float fx = 10000000.f;
+    const float fy = 10000000.f;
+    const float cx = ((float)viewport.w - 1) / 2.f;
+    const float cy = ((float)viewport.h - 1) / 2.f;
+    float cameraMatrixData[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    cv::Mat cameraMatrix = cv::Mat(3, 3, CV_32F, cameraMatrixData);
+
+    cv::Mat rotation, translation;
+    std::cout << reference_coords.size() << ", " << query_points.size() << std::endl;
+    cv::solvePnPRansac(reference_coords, query_points, cameraMatrix, {}, rotation, translation);
 }
 
 void renderer::search2()
