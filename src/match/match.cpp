@@ -237,7 +237,6 @@ void renderer::on_display()
 void renderer::search()
 {
     auto match_result = match();
-    //TODO filter matches with cross-check or ratio test.
     auto good_matches = match_result.good_matches();
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
@@ -252,27 +251,39 @@ void renderer::search()
     // distance estimation: assume (tnear+tfar)/2 for now
     std::vector<cv::Point3f> reference_coords;
     auto camera = cam;
-    const auto viewport = cam.get_viewport();
-    cam.begin_frame();
+    const auto viewport = camera.get_viewport();
+    camera.begin_frame();
     for (auto& p : reference_points)
     {
-        auto r = cam.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
+        auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         auto hr = intersect(r, bbox);
         auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
         reference_coords.push_back({coord.x, coord.y, coord.z});
     }
-    cam.end_frame();
+    camera.end_frame();
 
-    const float fx = 10000000.f;
-    const float fy = 10000000.f;
-    const float cx = ((float)viewport.w - 1) / 2.f;
-    const float cy = ((float)viewport.h - 1) / 2.f;
-    float cameraMatrixData[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
-    cv::Mat cameraMatrix = cv::Mat(3, 3, CV_32F, cameraMatrixData);
+    // camera calibration
+    double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect());
+    double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy());
+    double cx = ((double)viewport.w - 1) / 2.0;
+    double cy = ((double)viewport.h - 1) / 2.0;
+    double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
+    // solve
     cv::Mat rotation, translation;
     std::cout << reference_coords.size() << ", " << query_points.size() << std::endl;
-    cv::solvePnPRansac(reference_coords, query_points, cameraMatrix, {}, rotation, translation);
+    cv::solvePnPRansac(reference_coords, query_points, camera_matrix, {}, rotation, translation);
+
+    // get position
+    cv::Mat rotation_matrix;
+    cv::Rodrigues(rotation, rotation_matrix);
+    cv::Mat camera_position = - rotation_matrix.t() * translation;
+    // flip z axis
+    camera_position.at<double>(2) *= -1.0;
+
+    std::cout << "camera.eye() = " << camera.eye() << "\n";
+    std::cout << "camera_position = \n" << camera_position << "\n";
 }
 
 void renderer::search2()
@@ -350,7 +361,7 @@ void renderer::search_impl(const search_mode mode, const int grid_size, const fl
     const auto initial_cam = cam;
     match_result_t best_result;
 
-    float progress = 0;
+    //float progress = 0;
     for (int x = 0; x < grid_size; ++x)
     {
         for (int y = 0; y < grid_size; ++y)
