@@ -263,19 +263,22 @@ void renderer::search()
     camera.end_frame();
 
     // camera calibration
-    double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect());
-    double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy());
-    double cx = ((double)viewport.w - 1) / 2.0;
-    double cy = ((double)viewport.h - 1) / 2.0;
-    // opencv stores in row-major order
-    double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    double camera_matrix_data[] = {464.5015218476296, 0, 250.047573597832, 0, 464.4999239385746, 191.1269819126254, 0, 0, 1};
+    double dist_coeffs_data[] = {-0.03361135221910527, 0.2931279617268819, 0.0001716954122287006, 4.167135245670189e-06, -0.8547813751784745};
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
-    //camera_matrix = camera_matrix.t();
+    cv::Mat dist_coeffs = cv::Mat(1, 5, CV_64F, dist_coeffs_data);
+    //double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect());
+    //double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy());
+    //double cx = ((double)viewport.w - 1) / 2.0;
+    //double cy = ((double)viewport.h - 1) / 2.0;
+    //// opencv stores in row-major order
+    //double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+    //cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
     // solve
     cv::Mat rotation, translation;
     std::cout << reference_coords.size() << ", " << query_points.size() << std::endl;
-    cv::solvePnPRansac(reference_coords, query_points, camera_matrix, {}, rotation, translation);
+    cv::solvePnPRansac(reference_coords, query_points, camera_matrix, dist_coeffs, rotation, translation);
 
     // get position
     cv::Mat rotation_matrix;
