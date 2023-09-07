@@ -25,12 +25,16 @@ void render_cpp(
 
     sched.frame([&](R ray) -> result_record<S>
     {
+        const C white{1.0, 1.0, 1.0, 1.0};
+        const C black{0.0, 0.0, 0.0, 1.0};
+        const C  grey{0.8, 0.8, 0.8, 1.0};
+
         result_record<S> result;
 
         auto hit_rec = intersect(ray, bbox);
         auto t = hit_rec.tnear;
 
-        result.color = C(0.0, 0.0, 1.0, 1.0);
+        result.color = white;
         
         if (hit_rec.hit)
         {
@@ -39,22 +43,22 @@ void render_cpp(
             {
                 if ((int)((pos.y + 40.f)/ 10) & 0x1)
                 {
-                    result.color = C(1.0);
+                    result.color = grey;
                 }
                 else
                 {
-                    result.color = C(0.0, 0.0, 0.0, 1.0);
+                    result.color = black;
                 }
             }
             else
             {
                 if ((int)((pos.y + 40.f)/ 10) & 0x1)
                 {
-                    result.color = C(0.0, 0.0, 0.0, 1.0);
+                    result.color = black;
                 }
                 else
                 {
-                    result.color = C(1.0);
+                    result.color = grey;
                 }
             }
         }

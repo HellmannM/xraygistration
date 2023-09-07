@@ -3,6 +3,7 @@
 
 #include <common/config.h>
 
+#include <cstring> // memcpy
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -13,9 +14,19 @@
 
 #include <GL/glew.h>
 
+// OpenCV includes
+#include <opencv2/opencv.hpp>
+#include <opencv2/calib3d.hpp> // cv::findChessboardCorners
+#include <opencv2/core/types.hpp>
+#include <opencv2/core/mat.hpp> // cv::Mat
+#include <opencv2/imgproc.hpp> // cv::cornerSubPix
+
+// CmdLine includes
 #include <Support/CmdLine.h>
 #include <Support/CmdLineUtil.h>
 
+// Visionaray includes
+#undef MATH_NAMESPACE
 #include <visionaray/cpu_buffer_rt.h>
 #include <visionaray/detail/platform.h>
 #include <visionaray/math/math.h>
@@ -23,7 +34,6 @@
 #include <visionaray/pinhole_camera.h>
 #include <visionaray/scheduler.h>
 
-#include <common/image.h>
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
@@ -53,7 +63,10 @@ struct renderer : viewer_type
     cpu_buffer_rt<PF_RGBA8, PF_UNSPECIFIED, PF_RGBA32F> host_rt;
     tiled_sched<ray_type_cpu>                           host_sched;
 
+    std::vector<std::vector<unorm<8>>>                  saved_frames;                
+
     void screenshot();
+    void calibrate();
 
 protected:
 
@@ -112,6 +125,9 @@ void renderer::on_key_press(key_event const& event)
     case 's':
         screenshot();
         break;
+    case 'c':
+        calibrate();
+        break;
     }
     #pragma GCC diagnostic pop
     
@@ -120,90 +136,59 @@ void renderer::on_key_press(key_event const& event)
 
 void renderer::screenshot()
 {
-    std::string screenshot_file_base = "screenshot";
-#if VSNRAY_COMMON_HAVE_PNG
-    static const std::string screenshot_file_suffix = ".png";
-    image::save_option opt1;
-#else
-    static const std::string screenshot_file_suffix = ".pnm";
-    image::save_option opt1({"binary", true});
-#endif
-
-    // Swizzle to RGB8 for compatibility with pnm image
-    std::vector<vector<3, unorm<8>>> rgb(host_rt.width() * host_rt.height());
-    swizzle(
-        rgb.data(),
-        PF_RGB8,
-        host_rt.color(),
-        PF_RGBA32F,
-        host_rt.width() * host_rt.height(),
-        TruncateAlpha
-        );
-
-    //if (rt.color_space() == host_device_rt::SRGB)
-    {
-        for (int y = 0; y < host_rt.height(); ++y)
-        {
-            for (int x = 0; x < host_rt.width(); ++x)
-            {
-                auto& color = rgb[y * host_rt.width() + x];
-                color.x = powf(color.x, 1 / 2.2f);
-                color.y = powf(color.y, 1 / 2.2f);
-                color.z = powf(color.z, 1 / 2.2f);
-            }
-        }
-    }
+    std::vector<vector<4, unorm<8>>> rgba(host_rt.width() * host_rt.height());
+    memcpy(
+            rgba.data(),
+            host_rt.color(),
+            host_rt.width() * host_rt.height() * sizeof(vector<4, unorm<8>>)
+    );
 
     // Flip so that origin is (top|left)
-    std::vector<vector<3, unorm<8>>> flipped(host_rt.width() * host_rt.height());
+    std::vector<vector<4, unorm<8>>> flipped(host_rt.width() * host_rt.height());
 
     for (int y = 0; y < host_rt.height(); ++y)
     {
         for (int x = 0; x < host_rt.width(); ++x)
         {
             int yy = host_rt.height() - y - 1;
-            flipped[yy * host_rt.width() + x] = rgb[y * host_rt.width() + x];
+            flipped[yy * host_rt.width() + x] = rgba[y * host_rt.width() + x];
         }
     }
 
-    image img(
-        host_rt.width(),
-        host_rt.height(),
-        PF_RGB8,
-        reinterpret_cast<uint8_t const*>(flipped.data())
-        );
-
-    int inc = 0;
-    std::string inc_str = "";
-
-    std::string filename = screenshot_file_base + inc_str + screenshot_file_suffix;
-
-    while (boost::filesystem::exists(filename))
+    // Convert to greyscale
+    std::vector<unorm<8>> grey(host_rt.width() * host_rt.height());
+    for (int y = 0; y < host_rt.height(); ++y)
     {
-        ++inc;
-        inc_str = std::to_string(inc);
-
-        while (inc_str.length() < 4)
+        for (int x = 0; x < host_rt.width(); ++x)
         {
-            inc_str = std::string("0") + inc_str;
+            auto rgba = flipped[y * host_rt.width() + x];
+            float premultiplied_pixel = ((float)rgba.x + (float)rgba.y + (float)rgba.z) / 4 * (float)rgba.w;
+            grey[y * host_rt.width() + x] = unorm<8>(premultiplied_pixel);
         }
-
-        inc_str = std::string("-") + inc_str;
-
-        filename = screenshot_file_base + inc_str + screenshot_file_suffix;
     }
 
-    if (img.save(filename, {opt1}))
-    {
-        std::cout << "Screenshot saved to file: " << filename << '\n';
-    }
-    else
-    {
-        std::cerr << "Error saving screenshot to file: " << filename << '\n';
-    }
-
+    saved_frames.push_back(grey);
+    std::cout << "saved " << saved_frames.size() << " frames.\n";
 }
 
+void renderer::calibrate()
+{
+    for (auto& frame : saved_frames)
+    {
+        auto frame_as_mat = cv::Mat(host_rt.height(), host_rt.width(), CV_8UC1, reinterpret_cast<void*>(frame.data()));
+        cv::Mat corners;
+        if (cv::findChessboardCorners(frame_as_mat, cv::Size(7, 7), corners))
+        {
+            cv::cornerSubPix(
+                    frame_as_mat,
+                    corners,
+                    cv::Size(5, 5),
+                    cv::Size(-1, -1),
+                    cv::TermCriteria(cv::TermCriteria::Type::EPS + cv::TermCriteria::Type::COUNT, 30, 0.1)
+            );
+        }
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 // Main function, performs initialization
