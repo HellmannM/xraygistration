@@ -63,7 +63,8 @@ struct renderer : viewer_type
     cpu_buffer_rt<PF_RGBA8, PF_UNSPECIFIED, PF_RGBA32F> host_rt;
     tiled_sched<ray_type_cpu>                           host_sched;
 
-    std::vector<std::vector<unorm<8>>>                  saved_frames;                
+    //std::vector<std::vector<unorm<8>>>                  saved_frames;                
+    std::vector<std::vector<vector<4, unorm<8>>>>       saved_frames;                
 
     void screenshot();
     void calibrate();
@@ -155,39 +156,70 @@ void renderer::screenshot()
         }
     }
 
-    // Convert to greyscale
-    std::vector<unorm<8>> grey(host_rt.width() * host_rt.height());
-    for (int y = 0; y < host_rt.height(); ++y)
-    {
-        for (int x = 0; x < host_rt.width(); ++x)
-        {
-            auto rgba = flipped[y * host_rt.width() + x];
-            float premultiplied_pixel = ((float)rgba.x + (float)rgba.y + (float)rgba.z) / 4 * (float)rgba.w;
-            grey[y * host_rt.width() + x] = unorm<8>(premultiplied_pixel);
-        }
-    }
+//    // Convert to greyscale
+//    std::vector<unorm<8>> grey(host_rt.width() * host_rt.height());
+//    for (int y = 0; y < host_rt.height(); ++y)
+//    {
+//        for (int x = 0; x < host_rt.width(); ++x)
+//        {
+//            auto rgba = flipped[y * host_rt.width() + x];
+//            float premultiplied_pixel = ((float)rgba.x + (float)rgba.y + (float)rgba.z) / 4 * (float)rgba.w;
+//            grey[y * host_rt.width() + x] = unorm<8>(premultiplied_pixel);
+//        }
+//    }
 
-    saved_frames.push_back(grey);
+    saved_frames.push_back(flipped);
     std::cout << "saved " << saved_frames.size() << " frames.\n";
 }
 
 void renderer::calibrate()
 {
+    std::vector<cv::Vec3f> objects;
+    for (int y=-30; y<=30; y+=10)
+    {
+        for (int x=-30; x<=30; x+=10)
+        {
+            objects.push_back(cv::Vec3f(x, y, 0.0f));
+        }
+    }
+
+    std::vector<std::vector<cv::Vec3f>> objectPoints;
+    std::vector<cv::Mat> cornerPoints;
     for (auto& frame : saved_frames)
     {
-        auto frame_as_mat = cv::Mat(host_rt.height(), host_rt.width(), CV_8UC1, reinterpret_cast<void*>(frame.data()));
+        auto frame_as_mat = cv::Mat(host_rt.height(), host_rt.width(), CV_8UC4, reinterpret_cast<void*>(frame.data()));
+        cv::Mat frame_as_grey_mat;
+        cv::cvtColor(frame_as_mat, frame_as_grey_mat, cv::COLOR_RGBA2GRAY);
         cv::Mat corners;
-        if (cv::findChessboardCorners(frame_as_mat, cv::Size(7, 7), corners))
+        if (cv::findChessboardCorners(frame_as_grey_mat, cv::Size(7, 7), corners))
         {
             cv::cornerSubPix(
-                    frame_as_mat,
+                    frame_as_grey_mat,
                     corners,
                     cv::Size(5, 5),
                     cv::Size(-1, -1),
                     cv::TermCriteria(cv::TermCriteria::Type::EPS + cv::TermCriteria::Type::COUNT, 30, 0.1)
             );
+            cornerPoints.push_back(corners);
+            objectPoints.push_back(objects);
         }
     }
+
+    cv::Mat cameraMatrix;
+    cv::Mat distCoeffs;
+    std::vector<cv::Mat> rvecs;
+    std::vector<cv::Mat> tvecs;
+    cv::calibrateCamera(
+            objectPoints,
+            cornerPoints,
+            cv::Size(host_rt.height(), host_rt.width()),
+            cameraMatrix,
+            distCoeffs,
+            rvecs,
+            tvecs
+    );
+    std::cout << "cameraMatrix=\n" << cameraMatrix << "\n";
+    std::cout << "distCoeffs=\n" << distCoeffs << "\n";
 }
 
 //-------------------------------------------------------------------------------------------------
