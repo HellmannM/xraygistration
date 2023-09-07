@@ -267,8 +267,10 @@ void renderer::search()
     double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy());
     double cx = ((double)viewport.w - 1) / 2.0;
     double cy = ((double)viewport.h - 1) / 2.0;
+    // opencv stores in row-major order
     double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
+    //camera_matrix = camera_matrix.t();
 
     // solve
     cv::Mat rotation, translation;
