@@ -266,6 +266,7 @@ void renderer::search()
     // camera calibration
     double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect()); // fx=444.661
     double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy()); // fy=462.322
+    fy = 463.53; // TODO gives best values close to starting point?!
     double cx = ((double)viewport.w - 1) / 2.0; // (500-1)/2=249.5
     double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
     // doesn't like fx, works good with fy?!
