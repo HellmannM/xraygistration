@@ -238,6 +238,7 @@ void renderer::search()
 {
     auto match_result = match();
     auto good_matches = match_result.good_matches();
+    std::cout << "Searching with " << good_matches.size() << " good matches.\n";
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
     for (auto& m : good_matches)
@@ -269,23 +270,33 @@ void renderer::search()
     double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
     // doesn't like fx, works good with fy?!
     double camera_matrix_data[] = {fy, 0, cx, 0, fy, cy, 0, 0, 1};
-    //// opencv stores in row-major order
+    // opencv stores in row-major order
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
     // solve
     cv::Mat rotation, translation;
-    std::cout << reference_coords.size() << ", " << query_points.size() << std::endl;
     cv::solvePnPRansac(reference_coords, query_points, camera_matrix, {}, rotation, translation);
-
-    // get position
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
-    cv::Mat camera_position = - rotation_matrix.t() * translation;
-    // invert z axis
-    camera_position.at<double>(2) *= -1.0;
+    auto rotation_mat3 = mat3(
+            rotation_matrix.at<double>(0,0), rotation_matrix.at<double>(1,0), rotation_matrix.at<double>(2,0),
+            rotation_matrix.at<double>(0,1), rotation_matrix.at<double>(1,1), rotation_matrix.at<double>(2,1),
+            rotation_matrix.at<double>(0,2), rotation_matrix.at<double>(1,2), rotation_matrix.at<double>(2,2));
+    auto translation_vec3 = vec3(translation.at<double>(0), translation.at<double>(1), translation.at<double>(2));
 
-    std::cout << "camera.eye() = " << camera.eye() << "\n";
-    std::cout << "camera_position = \n" << camera_position << "\n";
+    // get position
+    auto eye = -1.f * transpose(rotation_mat3) * translation_vec3;
+    eye.z *= -1; // invert z axis
+    std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
+    std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
+
+    // get up & dir/center
+    auto dir = normalize(transpose(rotation_mat3) * vec3f(0, 0, 1));
+    auto up  = normalize(transpose(rotation_mat3) * vec3f(0, -1, 1));
+    std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
+    std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
+    std::cout << "camera dir = " << std::fixed << std::setprecision(2) << normalize(camera.eye() - camera.center()) << "\n";
+    std::cout << "dir =        " << std::fixed << std::setprecision(2) << dir << "\n";
 }
 
 void renderer::search2()
