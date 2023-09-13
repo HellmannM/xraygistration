@@ -278,21 +278,21 @@ void renderer::search()
     cv::solvePnPRansac(reference_coords, query_points, camera_matrix, {}, rotation, translation);
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
-    auto rotation_mat3 = mat3(
+    auto rotation_mat3 = matrix<3, 3, double>(
             rotation_matrix.at<double>(0,0), rotation_matrix.at<double>(1,0), rotation_matrix.at<double>(2,0),
             rotation_matrix.at<double>(0,1), rotation_matrix.at<double>(1,1), rotation_matrix.at<double>(2,1),
             rotation_matrix.at<double>(0,2), rotation_matrix.at<double>(1,2), rotation_matrix.at<double>(2,2));
-    auto translation_vec3 = vec3(translation.at<double>(0), translation.at<double>(1), translation.at<double>(2));
+    auto translation_vec3 = vector<3, double>(translation.at<double>(0), translation.at<double>(1), translation.at<double>(2));
 
     // get position
-    auto eye = -1.f * transpose(rotation_mat3) * translation_vec3;
+    auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
     eye.z *= -1; // invert z axis
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
     // get up & dir/center
-    auto dir = normalize(transpose(rotation_mat3) * vec3f(0, 0, 1));
-    auto up  = normalize(transpose(rotation_mat3) * vec3f(0, -1, 1));
+    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, 1));
+    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 1));
     std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
     std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
     std::cout << "camera dir = " << std::fixed << std::setprecision(2) << normalize(camera.eye() - camera.center()) << "\n";
