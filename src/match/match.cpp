@@ -161,7 +161,9 @@ struct renderer : viewer_type
     void update_reference_image(const cv::Mat& image);
     match_result_t match();
     void search();
-    void search2();
+    void search_2d2d();
+    void search_3d2d();
+    void search_num_of_matches();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
     std::vector<vector<4, unorm<8>>> get_current_image();
@@ -236,6 +238,11 @@ void renderer::on_display()
 
 void renderer::search()
 {
+    search_2d2d();
+}
+
+void renderer::search_2d2d()
+{
     auto match_result = match();
     auto good_matches = match_result.good_matches();
     std::cout << "Searching with " << good_matches.size() << " good matches.\n";
@@ -247,7 +254,55 @@ void renderer::search()
         query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
     }
 
+    auto camera = cam;
+    const auto viewport = camera.get_viewport();
+    double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect()); // fx=444.661
+    double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy()); // fy=462.322
+    double cx = ((double)viewport.w - 1) / 2.0; // (500-1)/2=249.5
+    double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
+    double camera_matrix_data[] = {fy, 0, cx, 0, fy, cy, 0, 0, 1}; // TODO using fy instead of fx but why?
+    cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
+
     //auto homography = cv::findHomography(query_points, reference_points, cv::RANSAC);
+    cv::Mat mask;
+    auto essential_mat = cv::findEssentialMat(reference_points, query_points, camera_matrix, cv::RANSAC, 0.999, 1.0, mask);
+
+//    auto decomp = cv::SVD(essential_mat);
+//    auto u = decomp.u;
+//    auto s = cv::Mat(3, 3, CV_64F, 0.0);
+//    s.at<double>(0, 0) = decomp.w.at<double>(0, 0);
+//    s.at<double>(1, 1) = decomp.w.at<double>(0, 1);
+//    s.at<double>(2, 2) = decomp.w.at<double>(0, 2);
+//    auto vt = decomp.vt;
+//    auto w = cv::Mat(3, 3, CV_64F, 0.0);
+//    w.at<double>(0, 1) = -1;
+//    w.at<double>(1, 0) =  1;
+//    w.at<double>(2, 2) =  1;
+//
+//    auto rotation_matrix_1 = u * w * vt;
+//    auto rotation_matrix_2 = u * w.t() * vt;
+//    std::cout << "rotation_matrix_1: \n" << rotation_matrix_1 << "\n";
+//    std::cout << "rotation_matrix_2: \n" << rotation_matrix_2 << "\n";
+//    std::cout << "u: \n" << u << "\n";
+
+    cv::Mat rotation, translation;
+    cv::recoverPose(essential_mat, reference_points, query_points, camera_matrix, rotation, translation, mask);
+    std::cout << "rotation: \n" << rotation<< "\n";
+    std::cout << "translation: \n" << translation<< "\n";
+}
+
+void renderer::search_3d2d()
+{
+    auto match_result = match();
+    auto good_matches = match_result.good_matches();
+    std::cout << "Searching with " << good_matches.size() << " good matches.\n";
+    std::vector<cv::Point2f> reference_points;
+    std::vector<cv::Point2f> query_points;
+    for (auto& m : good_matches)
+    {
+        reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
+        query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
+    }
 
     // distance estimation: assume (tnear+tfar)/2 for now
     std::vector<cv::Point3f> reference_coords;
@@ -300,7 +355,7 @@ void renderer::search()
     std::cout << "dir =        " << std::fixed << std::setprecision(2) << dir << "\n";
 }
 
-void renderer::search2()
+void renderer::search_num_of_matches()
 {
     constexpr float relax = 1.1f; // modify search_distance slightly to avoid reusing exact same points.
     constexpr int grid_size = 7;
