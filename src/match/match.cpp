@@ -267,24 +267,28 @@ void renderer::search_2d2d()
     cv::Mat mask;
     auto essential_mat = cv::findEssentialMat(reference_points, query_points, camera_matrix, cv::RANSAC, 0.999, 1.0, mask);
 
-//    auto decomp = cv::SVD(essential_mat);
-//    auto u = decomp.u;
-//    auto s = cv::Mat(3, 3, CV_64F, 0.0);
-//    s.at<double>(0, 0) = decomp.w.at<double>(0, 0);
-//    s.at<double>(1, 1) = decomp.w.at<double>(0, 1);
-//    s.at<double>(2, 2) = decomp.w.at<double>(0, 2);
-//    auto vt = decomp.vt;
-//    auto w = cv::Mat(3, 3, CV_64F, 0.0);
-//    w.at<double>(0, 1) = -1;
-//    w.at<double>(1, 0) =  1;
-//    w.at<double>(2, 2) =  1;
-//
-//    auto rotation_matrix_1 = u * w * vt;
-//    auto rotation_matrix_2 = u * w.t() * vt;
-//    std::cout << "rotation_matrix_1: \n" << rotation_matrix_1 << "\n";
-//    std::cout << "rotation_matrix_2: \n" << rotation_matrix_2 << "\n";
-//    std::cout << "u: \n" << u << "\n";
+    auto decomp = cv::SVD(essential_mat);
+    auto u = decomp.u;
+    auto s = cv::Mat(3, 3, CV_64F, 0.0);
+    s.at<double>(0, 0) = decomp.w.at<double>(0, 0);
+    s.at<double>(1, 1) = decomp.w.at<double>(0, 1);
+    s.at<double>(2, 2) = decomp.w.at<double>(0, 2);
+    auto vt = decomp.vt;
+    auto w = cv::Mat(3, 3, CV_64F, 0.0);
+    w.at<double>(0, 1) =  1;
+    w.at<double>(1, 0) = -1;
+    w.at<double>(2, 2) =  1;
 
+    auto rotation_matrix_1 = u * w * vt;
+    auto rotation_matrix_2 = u * w.t() * vt;
+    std::cout << "rotation_matrix_1: \n" << rotation_matrix_1 << "\n";
+    std::cout << "rotation_matrix_2: \n" << rotation_matrix_2 << "\n";
+    auto t1 = u.col(2);
+    auto t2 = -t1;
+    std::cout << "t1: \n" << t1 << "\n";
+    std::cout << "t2: \n" << t2 << "\n";
+
+    std::cout << "\n\nRecoverPose:\n";
     cv::Mat rotation, translation;
     cv::recoverPose(essential_mat, reference_points, query_points, camera_matrix, rotation, translation, mask);
     std::cout << "rotation: \n" << rotation<< "\n";
