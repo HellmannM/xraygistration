@@ -238,7 +238,7 @@ void renderer::on_display()
 
 void renderer::search()
 {
-    search_2d2d();
+    search_3d2d();
 }
 
 void renderer::search_2d2d()
@@ -279,8 +279,8 @@ void renderer::search_2d2d()
     w.at<double>(1, 0) = -1;
     w.at<double>(2, 2) =  1;
 
-    auto rotation_matrix_1 = u * w * vt;
-    auto rotation_matrix_2 = u * w.t() * vt;
+    cv::Mat rotation_matrix_1 = u * w * vt;
+    cv::Mat rotation_matrix_2 = u * w.t() * vt;
     std::cout << "rotation_matrix_1: \n" << rotation_matrix_1 << "\n";
     std::cout << "rotation_matrix_2: \n" << rotation_matrix_2 << "\n";
     auto t1 = u.col(2);
@@ -288,11 +288,25 @@ void renderer::search_2d2d()
     std::cout << "t1: \n" << t1 << "\n";
     std::cout << "t2: \n" << t2 << "\n";
 
-    std::cout << "\n\nRecoverPose:\n";
-    cv::Mat rotation, translation;
-    cv::recoverPose(essential_mat, reference_points, query_points, camera_matrix, rotation, translation, mask);
-    std::cout << "rotation: \n" << rotation<< "\n";
-    std::cout << "translation: \n" << translation<< "\n";
+//    std::cout << "\n\nRecoverPose:\n";
+//    cv::Mat rotation, translation;
+//    cv::recoverPose(essential_mat, reference_points, query_points, camera_matrix, rotation, translation, mask);
+//    std::cout << "rotation: \n" << rotation<< "\n";
+//    std::cout << "translation: \n" << translation<< "\n";
+
+    // rotate cam
+    cv::Mat rotation;
+    if (1.0 - std::abs(rotation_matrix_1.at<double>(0,0)) < 0.1)
+        rotation = rotation_matrix_1;
+    else
+        rotation = rotation_matrix_2;
+    auto rotation_mat3 = matrix<3, 3, float>(
+            rotation.at<double>(0,0), rotation.at<double>(1,0), rotation.at<double>(2,0),
+            rotation.at<double>(0,1), rotation.at<double>(1,1), rotation.at<double>(2,1),
+            rotation.at<double>(0,2), rotation.at<double>(1,2), rotation.at<double>(2,2));
+    auto center = rotation_mat3 * (camera.center() - camera.eye()) + camera.eye();
+    auto up = rotation_mat3 * camera.up();
+    cam.look_at(camera.eye(), center, up);
 }
 
 void renderer::search_3d2d()
