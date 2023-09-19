@@ -348,8 +348,38 @@ void renderer::search_3d2d()
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
     // solve
-    cv::Mat rotation, translation;
-    cv::solvePnPRansac(reference_coords, query_points, camera_matrix, {}, rotation, translation);
+    cv::Mat rotation;
+    cv::Mat translation;
+    cv::solvePnP(
+            reference_coords,
+            query_points,
+            camera_matrix,
+            std::vector<double>(), // distCoeffs
+            rotation,
+            translation,
+            false, // useExtrinsicGuess = false
+    	    cv::SOLVEPNP_ITERATIVE // flags = SOLVEPNP_ITERATIVE
+    );
+//    cv::Mat rotation = cv::Mat(3, 1, CV_64FC1, 0.0);
+//    cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
+//    translation.at<double>(0) = camera.eye().x;
+//    translation.at<double>(1) = camera.eye().y;
+//    translation.at<double>(2) = camera.eye().z;
+//    cv::solvePnPRansac(
+//            reference_coords,
+//            query_points,
+//            camera_matrix,
+//            std::vector<double>(), // distCoeffs
+//            rotation,
+//            translation,
+//            false, // useExtrinsicGuess = false
+//    	    100, // iterationsCount = 100
+//    	    0.1f, // reprojectionError = 8.0
+//    	    0.99, // confidence = 0.99,
+//    	    cv::noArray(), // inliers = noArray(),
+//    	    cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
+//    );
+    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
     auto rotation_mat3 = matrix<3, 3, double>(
@@ -360,7 +390,7 @@ void renderer::search_3d2d()
 
     // get position
     auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
-    eye.z *= -1; // invert z axis
+    //eye.z *= -1; // invert z axis
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
@@ -872,8 +902,8 @@ int main(int argc, char** argv)
 
     rend.add_manipulator( std::make_shared<arcball_manipulator>(rend.cam, mouse::Left) );
     rend.add_manipulator( std::make_shared<pan_manipulator>(rend.cam, mouse::Middle) );
-    // Additional "Alt + LMB" pan manipulator for setups w/o middle mouse button
-    rend.add_manipulator( std::make_shared<pan_manipulator>(rend.cam, mouse::Left, keyboard::Alt) );
+    // Additional "Shift + LMB" pan manipulator for setups w/o middle mouse button
+    rend.add_manipulator( std::make_shared<pan_manipulator>(rend.cam, mouse::Left, keyboard::Shift) );
     rend.add_manipulator( std::make_shared<zoom_manipulator>(rend.cam, mouse::Right) );
 
     rend.event_loop();
