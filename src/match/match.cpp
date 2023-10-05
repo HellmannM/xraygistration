@@ -238,7 +238,14 @@ void renderer::on_display()
 
 void renderer::search()
 {
-    search_3d2d();
+    for (size_t i=0; i<1; ++i)
+    {
+        search_3d2d();
+    }
+    //std::cout << "cam.eye() = " << std::fixed << std::setprecision(2) << cam.eye() << "\n";
+    //std::cout << "cam.up()  = " << std::fixed << std::setprecision(2) << cam.up() << "\n";
+    //std::cout << "cam dir   = " << std::fixed << std::setprecision(2) << normalize(cam.eye() - cam.center()) << "\n";
+
 }
 
 void renderer::search_2d2d()
@@ -313,7 +320,12 @@ void renderer::search_3d2d()
 {
     auto match_result = match();
     auto good_matches = match_result.good_matches();
-    std::cout << "Searching with " << good_matches.size() << " good matches.\n";
+    if (good_matches.size() < 100)
+    {
+        std::cerr << "ERROR: found less than 100 good matches. Aborting search...\n";
+        return;
+    }
+    //std::cout << "Searching with " << good_matches.size() << " good matches.\n";
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
     for (auto& m : good_matches)
@@ -323,16 +335,16 @@ void renderer::search_3d2d()
     }
 
     // distance estimation: assume (tnear+tfar)/2 for now
-    std::vector<cv::Point3f> reference_coords;
+    std::vector<cv::Point3f> query_coords;
     auto camera = cam;
     const auto viewport = camera.get_viewport();
     camera.begin_frame();
-    for (auto& p : reference_points)
+    for (auto& p : query_points)
     {
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         auto hr = intersect(r, bbox);
         auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
-        reference_coords.push_back({coord.x, coord.y, coord.z});
+        query_coords.push_back({coord.x, coord.y, coord.z});
     }
     camera.end_frame();
 
@@ -351,8 +363,8 @@ void renderer::search_3d2d()
     cv::Mat rotation;
     cv::Mat translation;
     cv::solvePnP(
-            reference_coords,
-            query_points,
+            query_coords,
+            reference_points,
             camera_matrix,
             std::vector<double>(), // distCoeffs
             rotation,
@@ -379,7 +391,7 @@ void renderer::search_3d2d()
 //    	    cv::noArray(), // inliers = noArray(),
 //    	    cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
 //    );
-    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
+//    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
     auto rotation_mat3 = matrix<3, 3, double>(
@@ -390,17 +402,21 @@ void renderer::search_3d2d()
 
     // get position
     auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
-    //eye.z *= -1; // invert z axis
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
     // get up & dir/center
-    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, 1));
-    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 1));
+    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, -1));
+    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 0));
     std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
     std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
-    std::cout << "camera dir = " << std::fixed << std::setprecision(2) << normalize(camera.eye() - camera.center()) << "\n";
+    std::cout << "camera dir = " << std::fixed << std::setprecision(2) << normalize(camera.center() - camera.eye()) << "\n";
     std::cout << "dir =        " << std::fixed << std::setprecision(2) << dir << "\n";
+
+    std::cout << "camera.center() = " << std::fixed << std::setprecision(2) << camera.center() << "\n";
+    std::cout << "center =          " << std::fixed << std::setprecision(2) << eye+dir << "\n";
+    // update view
+    cam.look_at(vec3(eye), vec3(eye + dir), vec3(up));
 }
 
 void renderer::search_num_of_matches()
@@ -850,6 +866,10 @@ void renderer::update_reference_image()
 
 void renderer::update_reference_image(const cv::Mat& image)
 {
+    std::cout << "updating reference image with current cam:\n"
+              << "\tcam.eye() = " << std::fixed << std::setprecision(2) << cam.eye() << "\n"
+              << "\tcam.up()  = " << std::fixed << std::setprecision(2) << cam.up() << "\n"
+              << "\tcam dir   = " << std::fixed << std::setprecision(2) << normalize(cam.eye() - cam.center()) << "\n";
     matcher.init(image);
 }
 
