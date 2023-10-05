@@ -414,9 +414,9 @@ void renderer::search_3d2d()
     std::cout << "dir =        " << std::fixed << std::setprecision(2) << dir << "\n";
 
     std::cout << "camera.center() = " << std::fixed << std::setprecision(2) << camera.center() << "\n";
-    std::cout << "center =          " << std::fixed << std::setprecision(2) << eye+dir << "\n";
+    std::cout << "center =          " << std::fixed << std::setprecision(2) << eye + (double)camera.distance() * dir << "\n";
     // update view
-    cam.look_at(vec3(eye), vec3(eye + dir), vec3(up));
+    cam.look_at(vec3(eye), vec3(eye + (double)camera.distance() * dir), vec3(up));
 }
 
 void renderer::search_num_of_matches()
