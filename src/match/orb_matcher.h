@@ -41,16 +41,16 @@ struct orb_matcher
     matcher_mode                                        mode;
 
     orb_matcher()
-        : cpu_orb(cv::ORB::create(                                  // default values
+        : cpu_orb(cv::ORB::create(                              // default values
                 /*int nfeatures     */ 5000,                    // 500
                 /*float scaleFactor */ 1.1f,                    // 1.2f
-                /*int nlevels       */ 15,                       // 8
-                /*int edgeThreshold */ 51,                      // 31
+                /*int nlevels       */ 15,                      // 8
+                /*int edgeThreshold */ 10,                      // 31
                 /*int firstLevel    */ 0,                       // 0
                 /*int WTA_K         */ 2,                       // 2
                 /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
-                /*int patchSize     */ 51,                      // 31
-                /*int fastThreshold */ 20                       // 20
+                /*int patchSize     */ 31,                      // 31
+                /*int fastThreshold */ 10                       // 20
           ))
         , cpu_matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
         , cpu_matcher_initialized(false)

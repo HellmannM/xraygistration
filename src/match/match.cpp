@@ -320,9 +320,10 @@ void renderer::search_3d2d()
 {
     auto match_result = match();
     auto good_matches = match_result.good_matches();
-    if (good_matches.size() < 100)
+    constexpr size_t min_good_matches {50};
+    if (good_matches.size() < min_good_matches)
     {
-        std::cerr << "ERROR: found less than 100 good matches. Aborting search...\n";
+        std::cerr << "ERROR: found less than " << min_good_matches << " good matches. Aborting search...\n";
         return;
     }
     //std::cout << "Searching with " << good_matches.size() << " good matches.\n";
