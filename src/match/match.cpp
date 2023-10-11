@@ -320,7 +320,7 @@ void renderer::search_3d2d()
 {
     auto match_result = match();
     auto good_matches = match_result.good_matches();
-    constexpr size_t min_good_matches {50};
+    constexpr size_t min_good_matches {10};
     if (good_matches.size() < min_good_matches)
     {
         std::cerr << "ERROR: found less than " << min_good_matches << " good matches. Aborting search...\n";
@@ -740,15 +740,30 @@ void renderer::load_volume()
         return;
     }
     else vd->printInfoLine();
-    virvo::TextureUtil tu(vd);
+//    virvo::TextureUtil tu(vd);
     assert(vd->getChan() == 1); // only support single channel data
-    virvo::TextureUtil::Pointer tex_data = nullptr;
-    virvo::TextureUtil::Channels channelbits = 1ULL;
-    tex_data = tu.getTexture(virvo::vec3i(0),
-            virvo::vec3i(vd->vox),
-            texture_format,
-            channelbits,
-            0 /*frame*/ );
+//    virvo::TextureUtil::Pointer tex_data = nullptr;
+//    virvo::TextureUtil::Channels channelbits = 1ULL;
+//    tex_data = tu.getTexture(virvo::vec3i(0),
+//            virvo::vec3i(vd->vox),
+//            texture_format,
+//            channelbits,
+//            0 /*frame*/ );
+    //DEBUG CLAMPING
+    for (size_t x=0; x<vd->vox[0]; ++x)
+    {
+        for (size_t y=0; y<vd->vox[1]; ++y)
+        {
+            for (size_t z=0; z<vd->vox[2]; ++z)
+            {
+                if ((2*(vd->vox[1] - y) + z) > (2*vd->vox[1] + vd->vox[2]) / 1.75f)
+                {
+                    const auto index = x + y * vd->vox[0] + z * vd->vox[0] * vd->vox[1];
+                    reinterpret_cast<volume_value_t*>(vd->getRaw(0))[index] = -4000;
+                }
+            }
+        }
+    }
     // update vol
     volume = volume_t(vd->vox[0], vd->vox[1], vd->vox[2]);
     //volume.reset(reinterpret_cast<volume_ref_t::value_type const*>(tex_data));

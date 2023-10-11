@@ -8,7 +8,7 @@
 struct match_result_t
 {
     static constexpr float match_ratio_compare_offset {0.005f};
-    static constexpr float good_match_threshold {70.f};
+    static constexpr float good_match_threshold {30.f};
 
     uint32_t num_ref_descriptors;
     std::vector<cv::DMatch> matches;
