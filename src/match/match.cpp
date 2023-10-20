@@ -326,11 +326,14 @@ void renderer::search_3d2d()
         std::cerr << "ERROR: found less than " << min_good_matches << " good matches. Aborting search...\n";
         return;
     }
+    std::sort(good_matches.begin(), good_matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
     //std::cout << "Searching with " << good_matches.size() << " good matches.\n";
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
-    for (auto& m : good_matches)
+    for (const auto& m : good_matches)
+    //for (auto e = good_matches.begin(); e != good_matches.begin() + min_good_matches; ++e)
     {
+        //const auto& m = *e;
         reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
         query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
     }
@@ -344,7 +347,14 @@ void renderer::search_3d2d()
     {
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         auto hr = intersect(r, bbox);
+//#define INV_Z
+#ifndef INV_Z
         auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
+#else
+        // inv z
+        vec3f dir_inv_z{r.dir.x, r.dir.y, -r.dir.z};
+        auto coord = r.ori + dir_inv_z * (hr.tnear + hr.tfar) / 2.f;
+#endif
         query_coords.push_back({coord.x, coord.y, coord.z});
     }
     camera.end_frame();
@@ -356,13 +366,19 @@ void renderer::search_3d2d()
     double cx = ((double)viewport.w - 1) / 2.0; // (500-1)/2=249.5
     double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
     // doesn't like fx, works good with fy?!
-    double camera_matrix_data[] = {fy, 0, cx, 0, fy, cy, 0, 0, 1};
+    fx = fy;
+    double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
     // opencv stores in row-major order
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
     // solve
     cv::Mat rotation;
-    cv::Mat translation;
+    //cv::Mat translation;
+    cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
+    translation.at<double>(0) = camera.eye().x;
+    translation.at<double>(1) = camera.eye().y;
+    translation.at<double>(2) = camera.eye().z;
+#if 1
     cv::solvePnP(
             query_coords,
             reference_points,
@@ -371,28 +387,30 @@ void renderer::search_3d2d()
             rotation,
             translation,
             false, // useExtrinsicGuess = false
-    	    cv::SOLVEPNP_ITERATIVE // flags = SOLVEPNP_ITERATIVE
+    	    cv::SOLVEPNP_ITERATIVE
+    	    //cv::SOLVEPNP_P3P
+    	    //cv::SOLVEPNP_AP3P
+    	    //cv::SOLVEPNP_SQPNP
+    	    //cv::SOLVEPNP_EPNP
     );
-//    cv::Mat rotation = cv::Mat(3, 1, CV_64FC1, 0.0);
-//    cv::Mat translation = cv::Mat(3, 1, CV_64FC1, 0.0);
-//    translation.at<double>(0) = camera.eye().x;
-//    translation.at<double>(1) = camera.eye().y;
-//    translation.at<double>(2) = camera.eye().z;
-//    cv::solvePnPRansac(
-//            reference_coords,
-//            query_points,
-//            camera_matrix,
-//            std::vector<double>(), // distCoeffs
-//            rotation,
-//            translation,
-//            false, // useExtrinsicGuess = false
-//    	    100, // iterationsCount = 100
-//    	    0.1f, // reprojectionError = 8.0
-//    	    0.99, // confidence = 0.99,
-//    	    cv::noArray(), // inliers = noArray(),
-//    	    cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
-//    );
-//    std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
+#else
+    cv::solvePnPRansac(
+            query_coords,
+            reference_points,
+            camera_matrix,
+            std::vector<double>(), // distCoeffs
+            rotation,
+            translation,
+            false, // useExtrinsicGuess = false
+            100, // iterationsCount = 100
+            0.1f, // reprojectionError = 8.0
+            0.99, // confidence = 0.99,
+            cv::noArray(), // inliers = noArray(),
+            cv::SOLVEPNP_ITERATIVE
+            //cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
+    );
+#endif
+    //std::cout << "rotation\n" << rotation << "\ntranslation\n" << translation << "\n";
     cv::Mat rotation_matrix;
     cv::Rodrigues(rotation, rotation_matrix);
     auto rotation_mat3 = matrix<3, 3, double>(
@@ -401,21 +419,41 @@ void renderer::search_3d2d()
             rotation_matrix.at<double>(0,2), rotation_matrix.at<double>(1,2), rotation_matrix.at<double>(2,2));
     auto translation_vec3 = vector<3, double>(translation.at<double>(0), translation.at<double>(1), translation.at<double>(2));
 
-    // get position
+    // camera eye
     auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
-    // get up & dir/center
-    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, -1));
+    // camera up
+#ifndef INV_Z
     auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 0));
+#else
+    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, 1, 0));
+    up.z = -up.z;
+#endif
     std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
     std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
-    std::cout << "camera dir = " << std::fixed << std::setprecision(2) << normalize(camera.center() - camera.eye()) << "\n";
+
+    // camera dir
+#ifndef INV_Z
+    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, -1));
+#else
+    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, 1));
+    dir.z = -dir.z;
+#endif
+    auto camera_dir = normalize(camera.center() - camera.eye());
+    std::cout << "camera dir = " << std::fixed << std::setprecision(2) << camera_dir << "\n";
     std::cout << "dir =        " << std::fixed << std::setprecision(2) << dir << "\n";
 
     std::cout << "camera.center() = " << std::fixed << std::setprecision(2) << camera.center() << "\n";
     std::cout << "center =          " << std::fixed << std::setprecision(2) << eye + (double)camera.distance() * dir << "\n";
+    if (   (norm(vec3f(eye) - camera.eye()) > norm(bbox.max - bbox.min))
+        || (acos(dot(vec3f(up), camera.up()) / (norm(up) * norm(camera.up()))) > M_PI/4)
+        || (acos(dot(vec3f(dir), camera_dir) / (norm(dir) * norm(camera_dir))) > M_PI/4))
+    {
+        std::cerr << "eye, up or dir differ too much! Not updating view...\n";
+        return;
+    }
     // update view
     cam.look_at(vec3(eye), vec3(eye + (double)camera.distance() * dir), vec3(up));
 }
@@ -849,6 +887,8 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     }
 #endif
 
+// flip before displaying with opencv. solvepnp will get confused however
+#if 0
     // Flip so that origin is (top|left)
     std::vector<vector<4, unorm<8>>> flipped(rt.width() * rt.height());
 
@@ -862,6 +902,9 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     }
 
     return flipped;
+#else
+    return rgba;
+#endif
 }
 
 void renderer::load_reference_image()
