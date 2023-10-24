@@ -347,13 +347,12 @@ void renderer::search_3d2d()
     {
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         auto hr = intersect(r, bbox);
-//#define INV_Z
-#ifndef INV_Z
         auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
-#else
-        // inv z
-        vec3f dir_inv_z{r.dir.x, r.dir.y, -r.dir.z};
-        auto coord = r.ori + dir_inv_z * (hr.tnear + hr.tfar) / 2.f;
+//#define INV_YZ
+#ifdef INV_YZ
+        // inv y, z
+        coord.y = -coord.y;
+        coord.z = -coord.z;
 #endif
         query_coords.push_back({coord.x, coord.y, coord.z});
     }
@@ -421,24 +420,26 @@ void renderer::search_3d2d()
 
     // camera eye
     auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
+#ifdef INV_YZ
+    eye.y = -eye.y;
+    eye.z = -eye.z;
+#endif
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
     // camera up
-#ifndef INV_Z
     auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 0));
-#else
-    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, 1, 0));
+#ifdef INV_YZ
+    up.y = -up.y;
     up.z = -up.z;
 #endif
     std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
     std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
 
     // camera dir
-#ifndef INV_Z
     auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, -1));
-#else
-    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, 1));
+#ifdef INV_YZ
+    dir.y = -dir.y;
     dir.z = -dir.z;
 #endif
     auto camera_dir = normalize(camera.center() - camera.eye());
@@ -665,13 +666,27 @@ void renderer::on_key_press(key_event const& event)
         break;
 
     case keyboard::key::F1:
-        std::cout << "Saved current cam 1." << "\n";
-        saved_cameras[0] = cam;
+        if (event.modifiers() == 0x00000004)
+        {
+            std::cout << "Jumping to savec cam 1.\n";
+            cam = saved_cameras[0];
+        } else
+        {
+            std::cout << "Saved current cam 1." << "\n";
+            saved_cameras[0] = cam;
+        }
         break;
 
     case keyboard::key::F2:
-        std::cout << "Saved current cam 2." << "\n";
-        saved_cameras[1] = cam;
+        if (event.modifiers() == 0x00000004)
+        {
+            std::cout << "Jumping to savec cam 2.\n";
+            cam = saved_cameras[1];
+        } else
+        {
+            std::cout << "Saved current cam 2." << "\n";
+            saved_cameras[1] = cam;
+        }
         break;
 
     case keyboard::key::One:
