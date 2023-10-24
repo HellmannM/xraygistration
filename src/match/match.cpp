@@ -668,7 +668,7 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::F1:
         if (event.modifiers() == 0x00000004)
         {
-            std::cout << "Jumping to savec cam 1.\n";
+            std::cout << "Jumping to saved cam 1.\n";
             cam = saved_cameras[0];
         } else
         {
@@ -680,7 +680,7 @@ void renderer::on_key_press(key_event const& event)
     case keyboard::key::F2:
         if (event.modifiers() == 0x00000004)
         {
-            std::cout << "Jumping to savec cam 2.\n";
+            std::cout << "Jumping to saved cam 2.\n";
             cam = saved_cameras[1];
         } else
         {
@@ -688,6 +688,19 @@ void renderer::on_key_press(key_event const& event)
             saved_cameras[1] = cam;
         }
         break;
+
+    case keyboard::key::F3:
+    {
+        auto pair1 = find_closest_points(saved_rays[0], saved_rays[2]);
+        auto pair2 = find_closest_points(saved_rays[1], saved_rays[3]);
+        auto p1 = (pair1.first + pair1.second) / 2.f;
+        auto p2 = (pair2.first + pair2.second) / 2.f;
+        std::cout << "Calculated Points:"
+                << "\nPoint 1: " << p1
+                << "\nPoint 2: " << p2
+                << std::endl;
+        break;
+    }
 
     case keyboard::key::One:
         selected_point = 1;
