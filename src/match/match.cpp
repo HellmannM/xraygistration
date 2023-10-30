@@ -348,10 +348,12 @@ void renderer::search_3d2d()
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         auto hr = intersect(r, bbox);
         auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
-//#define INV_YZ
-#ifdef INV_YZ
-        // inv y, z
+//#define INV_Y
+#define INV_Z
+#ifdef INV_Y
         coord.y = -coord.y;
+#endif
+#ifdef INV_Z
         coord.z = -coord.z;
 #endif
         query_coords.push_back({coord.x, coord.y, coord.z});
@@ -420,26 +422,32 @@ void renderer::search_3d2d()
 
     // camera eye
     auto eye = -1.0 * transpose(rotation_mat3) * translation_vec3;
-#ifdef INV_YZ
+#ifdef INV_Y
     eye.y = -eye.y;
+#endif
+#ifdef INV_Z
     eye.z = -eye.z;
 #endif
     std::cout << "camera.eye() = " << std::fixed << std::setprecision(2) << camera.eye() << "\n";
     std::cout << "eye =          " << std::fixed << std::setprecision(2) << eye          << "\n";
 
     // camera up
-    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, -1, 0));
-#ifdef INV_YZ
+    auto up  = normalize(transpose(rotation_mat3) * vector<3, double>(0, 1, 0));
+#ifdef INV_Y
     up.y = -up.y;
+#endif
+#ifdef INV_Z
     up.z = -up.z;
 #endif
     std::cout << "camera.up() = " << std::fixed << std::setprecision(2) << camera.up() << "\n";
     std::cout << "up =          " << std::fixed << std::setprecision(2) << up << "\n";
 
     // camera dir
-    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, -1));
-#ifdef INV_YZ
+    auto dir = normalize(transpose(rotation_mat3) * vector<3, double>(0, 0, 1));
+#ifdef INV_Y
     dir.y = -dir.y;
+#endif
+#ifdef INV_Z
     dir.z = -dir.z;
 #endif
     auto camera_dir = normalize(camera.center() - camera.eye());
@@ -915,8 +923,9 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     }
 #endif
 
+//#define FLIP_IMAGE
+#ifdef FLIP_IMAGE
 // flip before displaying with opencv. solvepnp will get confused however
-#if 0
     // Flip so that origin is (top|left)
     std::vector<vector<4, unorm<8>>> flipped(rt.width() * rt.height());
 
