@@ -162,7 +162,7 @@ struct renderer : viewer_type
     match_result_t match();
     void search();
     void search_2d2d();
-    void search_3d2d();
+    size_t search_3d2d();
     void search_num_of_matches();
     void search_impl(const search_mode mode, const int grid_size, const float search_distance);
     void search_impl_up(const float rotation_range);
@@ -238,10 +238,21 @@ void renderer::on_display()
 
 void renderer::search()
 {
-    for (size_t i=0; i<1; ++i)
+    size_t num_current_good_matches = 1;
+    size_t num_previous_good_matches = 0;
+    pinhole_camera previous_cam = cam;
+
+    for (size_t i=0; i<10; ++i)
     {
-        search_3d2d();
+        while (num_current_good_matches > num_previous_good_matches)
+        {
+            previous_cam = cam;
+            num_previous_good_matches = num_current_good_matches;
+            num_current_good_matches = search_3d2d();
+        }
     }
+    cam = previous_cam;
+
     //std::cout << "cam.eye() = " << std::fixed << std::setprecision(2) << cam.eye() << "\n";
     //std::cout << "cam.up()  = " << std::fixed << std::setprecision(2) << cam.up() << "\n";
     //std::cout << "cam dir   = " << std::fixed << std::setprecision(2) << normalize(cam.eye() - cam.center()) << "\n";
@@ -316,15 +327,16 @@ void renderer::search_2d2d()
     cam.look_at(camera.eye(), center, up);
 }
 
-void renderer::search_3d2d()
+size_t renderer::search_3d2d()
 {
     auto match_result = match();
     auto good_matches = match_result.good_matches();
+    std::cout << good_matches.size() << " good matches\n";
     constexpr size_t min_good_matches {10};
     if (good_matches.size() < min_good_matches)
     {
         std::cerr << "ERROR: found less than " << min_good_matches << " good matches. Aborting search...\n";
-        return;
+        return good_matches.size();
     }
     std::sort(good_matches.begin(), good_matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
     //std::cout << "Searching with " << good_matches.size() << " good matches.\n";
@@ -403,9 +415,9 @@ void renderer::search_3d2d()
             rotation,
             translation,
             false, // useExtrinsicGuess = false
-            100, // iterationsCount = 100
-            0.1f, // reprojectionError = 8.0
-            0.99, // confidence = 0.99,
+            1000, // iterationsCount = 100
+            0.8, // reprojectionError = 8.0
+            0.6, // confidence = 0.99,
             cv::noArray(), // inliers = noArray(),
             cv::SOLVEPNP_ITERATIVE
             //cv::SOLVEPNP_IPPE // flags = SOLVEPNP_ITERATIVE
@@ -461,10 +473,12 @@ void renderer::search_3d2d()
         || (acos(dot(vec3f(dir), camera_dir) / (norm(dir) * norm(camera_dir))) > M_PI/4))
     {
         std::cerr << "eye, up or dir differ too much! Not updating view...\n";
-        return;
+        return good_matches.size();
     }
     // update view
     cam.look_at(vec3(eye), vec3(eye + (double)camera.distance() * dir), vec3(up));
+
+    return good_matches.size();
 }
 
 void renderer::search_num_of_matches()
@@ -1023,4 +1037,41 @@ int main(int argc, char** argv)
     rend.add_manipulator( std::make_shared<zoom_manipulator>(rend.cam, mouse::Right) );
 
     rend.event_loop();
+}
+
+
+// C interface for python
+extern "C"
+{
+    void* create_renderer() { return new(std::nothrow) renderer; }
+    void destroy_renderer(void* ptr) { delete(ptr); }
+    int init_renderer(void* ptr, int argc, char** argv)
+    {
+        try
+        {
+            renderer* rend = reinterpret_cast<renderer*>(ptr);
+            rend->init(argc, argv);
+            rend->load_volume();
+            rend->load_reference_image();
+
+            float aspect = rend->width() / static_cast<float>(rend->height());
+
+            rend->cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
+            rend->cam.view_all( rend->bbox );
+
+            rend->add_manipulator( std::make_shared<arcball_manipulator>(rend->cam, mouse::Left) );
+            rend->add_manipulator( std::make_shared<pan_manipulator>(rend->cam, mouse::Middle) );
+            // Additional "Shift + LMB" pan manipulator for setups w/o middle mouse button
+            rend->add_manipulator( std::make_shared<pan_manipulator>(rend->cam, mouse::Left, keyboard::Shift) );
+            rend->add_manipulator( std::make_shared<zoom_manipulator>(rend->cam, mouse::Right) );
+
+            rend->event_loop();
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << e.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
+    }
 }
