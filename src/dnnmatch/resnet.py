@@ -11,15 +11,16 @@ from tensorflow.keras.optimizers import Adam
 
 # load test dataset
 import pathlib
-demo_dataset = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
-directory = tflow.keras.utils.get_file('flower_photos', origin=demo_dataset, untar=True)
-data_directory = pathlib.Path(directory)
+#demo_dataset = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
+#directory = tflow.keras.utils.get_file('flower_photos', origin=demo_dataset, untar=True)
+#data_directory = pathlib.Path(directory)
+data_directory = pathlib.Path("./flower_photos")
 # resize images in dataset
-import cv2
-sample_image=cv2.imread(str(roses[0]))
-sample_image_resized= cv2.resize(sample_image, (img_height,img_width))
-sample_image=np.expand_dims(sample_image_resized,axis=0)
-
+#import cv2
+##sample_image=cv2.imread(str(roses[0]))
+#sample_image=cv2.imread(str(data_directory))
+#sample_image_resized= cv2.resize(sample_image, (img_height,img_width))
+#sample_image=np.expand_dims(sample_image_resized,axis=0)
 
 # partition data in 2 sets
 img_height,img_width=180,180
@@ -30,7 +31,7 @@ train_ds = tflow.keras.preprocessing.image_dataset_from_directory(
   validation_split=0.2,
   subset="training",
   seed=123,
-label_mode='categorical',
+  label_mode='categorical',
   image_size=(img_height, img_width),
   batch_size=batch_size)
 # validation dataset 20%
@@ -39,14 +40,13 @@ validation_ds = tflow.keras.preprocessing.image_dataset_from_directory(
   validation_split=0.2,
   subset="validation",
   seed=123,
-label_mode='categorical',
+  label_mode='categorical',
   image_size=(img_height, img_width),
   batch_size=batch_size)
 
 # show 6 random images from dataset
 #import matplotlib.pyplot as plotter_lib
 #plotter_lib.figure(figsize=(10, 10))
-#epochs=10
 #for images, labels in train_ds.take(1):
 #  for var in range(6):
 #    ax = plt.subplot(3, 3, var + 1)
@@ -72,7 +72,8 @@ demo_resnet_model.add(Dense(5, activation='softmax')) # 5 classes
 
 
 # train
-demo_resnet_model.compile(optimizer=Adam(lr=0.001),loss='categorical_crossentropy',metrics=['accuracy'])
+epochs=10
+demo_resnet_model.compile(optimizer=Adam(learning_rate=0.001),loss='categorical_crossentropy',metrics=['accuracy'])
 history = demo_resnet_model.fit(train_ds, validation_data=validation_ds, epochs=epochs)
 
 # evaluate
