@@ -68,18 +68,11 @@ demo_resnet_model.add(pretrained_model_for_demo)
 # add a fully connected output layer
 demo_resnet_model.add(Flatten())
 demo_resnet_model.add(Dense(512, activation='relu'))
-# vec3: eye, dir, up
-demo_resnet_model.add(Dense(9, activation='softmax')) # 5 classes
-# activation: linear? (=identity)
+demo_resnet_model.add(Dense(5, activation='softmax')) # 5 classes
 
 
 # train
 epochs=10
-# Regression losses: mse? 
-# keras.losses.MeanSquaredError(
-#    reduction="sum_over_batch_size", name="mean_squared_error"
-#)
-
 demo_resnet_model.compile(optimizer=Adam(learning_rate=0.001),loss='categorical_crossentropy',metrics=['accuracy'])
 history = demo_resnet_model.fit(train_ds, validation_data=validation_ds, epochs=epochs)
 
