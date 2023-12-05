@@ -59,7 +59,7 @@ validation_ds = tflow.keras.preprocessing.image_dataset_from_directory(
 demo_resnet_model = Sequential()
 pretrained_model_for_demo= tflow.keras.applications.ResNet50(include_top=False,
                    input_shape=(180,180,3),
-                   pooling='avg',classes=5,
+                   pooling='avg',
                    weights='imagenet')
 for each_layer in pretrained_model_for_demo.layers:
         each_layer.trainable=False
@@ -68,9 +68,8 @@ demo_resnet_model.add(pretrained_model_for_demo)
 # add a fully connected output layer
 demo_resnet_model.add(Flatten())
 demo_resnet_model.add(Dense(512, activation='relu'))
-# vec3: eye, dir, up
-demo_resnet_model.add(Dense(9, activation='softmax')) # 5 classes
-# activation: linear? (=identity)
+# 3 vec3: eye, dir, up
+demo_resnet_model.add(Dense(9, activation='linear'))
 
 
 # train
@@ -80,7 +79,7 @@ epochs=10
 #    reduction="sum_over_batch_size", name="mean_squared_error"
 #)
 
-demo_resnet_model.compile(optimizer=Adam(learning_rate=0.001),loss='categorical_crossentropy',metrics=['accuracy'])
+demo_resnet_model.compile(optimizer=Adam(learning_rate=0.001),loss='mean_squared_error',metrics=['accuracy'])
 history = demo_resnet_model.fit(train_ds, validation_data=validation_ds, epochs=epochs)
 
 # evaluate
