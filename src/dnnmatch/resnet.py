@@ -3,84 +3,85 @@
 import matplotlib.pyplot as plotter_lib
 import numpy as np
 import PIL as image_lib
-import tensorflow as tflow
+import tensorflow as tf
 from tensorflow.keras.layers import Flatten
-from keras.layers import Dense
+from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 
-# load test dataset
-import pathlib
-#demo_dataset = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
-#directory = tflow.keras.utils.get_file('flower_photos', origin=demo_dataset, untar=True)
-#data_directory = pathlib.Path(directory)
-data_directory = pathlib.Path("./flower_photos")
-# resize images in dataset
-#import cv2
-##sample_image=cv2.imread(str(roses[0]))
-#sample_image=cv2.imread(str(data_directory))
-#sample_image_resized= cv2.resize(sample_image, (img_height,img_width))
-#sample_image=np.expand_dims(sample_image_resized,axis=0)
+class DataGenerator(tf.keras.utils.Sequence):
+    'Generates data for Keras'
+    def __init__(self, dim=(32,32,32), batch_size=128, batches_per_epoch=128, n_channels=1):
+        'Initialization'
+        self.dim = dim
+        self.batch_size = batch_size
+        self.batches_per_epoch = batches_per_epoch
+        self.n_channels = n_channels
 
-# partition data in 2 sets
-img_height,img_width=180,180
-batch_size=32
-# train dataset 80%
-train_ds = tflow.keras.preprocessing.image_dataset_from_directory(
-  data_directory,
-  validation_split=0.2,
-  subset="training",
-  seed=123,
-  label_mode='categorical',
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
-# validation dataset 20%
-validation_ds = tflow.keras.preprocessing.image_dataset_from_directory(
-  data_directory,
-  validation_split=0.2,
-  subset="validation",
-  seed=123,
-  label_mode='categorical',
-  image_size=(img_height, img_width),
-  batch_size=batch_size)
+    def __len__(self):
+        'Denotes the number of batches per epoch'
+        return self.batches_per_epoch
 
-# show 6 random images from dataset
-#import matplotlib.pyplot as plotter_lib
-#plotter_lib.figure(figsize=(10, 10))
-#for images, labels in train_ds.take(1):
-#  for var in range(6):
-#    ax = plt.subplot(3, 3, var + 1)
-#    plotter_lib.imshow(images[var].numpy().astype("uint8"))
-#    plotter_lib.axis("off")*
+    def __getitem__(self, index):
+        'Generate one batch of data'
+        X, y = self.__data_generation()
+        return X, y
+
+    def __data_generation(self):
+        'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
+        # Initialization
+        #X = np.empty((self.batch_size, *self.dim, self.n_channels))
+        X = np.empty((self.batch_size, self.n_channels, *self.dim))
+        y = np.empty((self.batch_size, 9), dtype=np.float32)
+
+        # Generate data
+        for i in range(self.batch_size):
+            y = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+            #TODO X[i,] = get_frame(y)
+            X[i,0,] = [[i, 1], [2, 3]]
+
+        return X, y
+
 
 # import ResNet-50 model from keras library
 # Setting include_top to False means it will allow adding input and output layers custom to a problem.
 # The weights parameter specifies that the model uses its weights while training on the imagenet dataset.
-demo_resnet_model = Sequential()
-pretrained_model_for_demo= tflow.keras.applications.ResNet50(include_top=False,
+model = Sequential()
+pretrained_model_for_demo= tf.keras.applications.ResNet50(include_top=False,
                    input_shape=(180,180,3),
                    pooling='avg',
                    weights='imagenet')
 for each_layer in pretrained_model_for_demo.layers:
         each_layer.trainable=False
-demo_resnet_model.add(pretrained_model_for_demo)
+model.add(pretrained_model_for_demo)
 
 # add a fully connected output layer
-demo_resnet_model.add(Flatten())
-demo_resnet_model.add(Dense(512, activation='relu'))
+model.add(Flatten())
+model.add(Dense(512, activation='relu'))
 # 3 vec3: eye, dir, up
-demo_resnet_model.add(Dense(9, activation='linear'))
+model.add(Dense(9, activation='linear'))
 
 
-# train
+#keras.losses.MeanSquaredError(reduction="sum_over_batch_size", name="mean_squared_error")
+model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['accuracy'])
+
+# Parameters
+#TODO get dims
+params = {'dim': (2,2,2),
+          'batch_size': 128,
+          'n_channels': 1}
+
+# Generators
+training_generator   = DataGenerator(batches_per_epoch=1024, **params)
+validation_generator = DataGenerator(batches_per_epoch=128, **params)
+
+# Train model on dataset
 epochs=10
-# Regression losses: mse? 
-# keras.losses.MeanSquaredError(
-#    reduction="sum_over_batch_size", name="mean_squared_error"
-#)
-
-demo_resnet_model.compile(optimizer=Adam(learning_rate=0.001),loss='mean_squared_error',metrics=['accuracy'])
-history = demo_resnet_model.fit(train_ds, validation_data=validation_ds, epochs=epochs)
+history = model.fit(x=training_generator,
+                    validation_data=validation_generator,
+                    epochs=epochs,
+                    use_multiprocessing=False,
+                    workers=1)
 
 # evaluate
 plotter_lib.figure(figsize=(8, 8))
