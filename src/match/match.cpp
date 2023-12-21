@@ -168,9 +168,10 @@ struct renderer : viewer_type
     void search_impl_up(const float rotation_range);
     std::vector<vector<4, unorm<8>>> get_current_image();
     std::pair<vec3, vec3> find_closest_points(ray_type_cpu r1, ray_type_cpu r2);
-protected:
 
     void on_display();
+
+protected:
     void on_resize(int w, int h);
     void on_key_press(visionaray::key_event const& event);
 
@@ -1044,12 +1045,15 @@ int main(int argc, char** argv)
 extern "C"
 {
     void* create_renderer() { return new(std::nothrow) renderer; }
-    void destroy_renderer(void* ptr) { delete(ptr); }
-    int init_renderer(void* ptr, int argc, char** argv)
+
+    void destroy_renderer(void* rend_ptr) { reinterpret_cast<renderer*>(rend_ptr); }
+
+    int init_renderer(void* rend_ptr, int argc, char** argv)
     {
+        std::cout << "init: rend_ptr=" << rend_ptr << "\n";
         try
         {
-            renderer* rend = reinterpret_cast<renderer*>(ptr);
+            renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
             rend->init(argc, argv);
             rend->load_volume();
             rend->load_reference_image();
@@ -1065,7 +1069,9 @@ extern "C"
             rend->add_manipulator( std::make_shared<pan_manipulator>(rend->cam, mouse::Left, keyboard::Shift) );
             rend->add_manipulator( std::make_shared<zoom_manipulator>(rend->cam, mouse::Right) );
 
-            rend->event_loop();
+            //rend->event_loop();
+            std::cout << "init: width=" << rend->width() << "\n";
+            std::cout << "init: height=" << rend->height() << "\n";
         }
         catch (std::exception const& e)
         {
@@ -1073,5 +1079,29 @@ extern "C"
             return EXIT_FAILURE;
         }
         return EXIT_SUCCESS;
+    }
+
+    int get_width(void* rend_ptr)// { return reinterpret_cast<renderer*>(rend_ptr)->width(); }
+    {
+        std::cout << "get_width: rend_ptr=" << rend_ptr << "\n";
+        auto r = reinterpret_cast<renderer*>(rend_ptr);
+        auto w = r->width();
+        std::cout << "get_width: width=" << w << "\n";
+    }
+
+    int get_height(void* rend_ptr) { return reinterpret_cast<renderer*>(rend_ptr)->height(); }
+
+    int get_bpp(void* rend_ptr) { return 4; }
+
+    void single_shot(void* rend_ptr, void* img_buff, float eye_x, float eye_y, float eye_z, float center_x, float center_y, float center_z, float up_x, float up_y, float up_z)
+    {
+        renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
+        vec3 eye(eye_x, eye_y, eye_z);
+        vec3 center(center_x, center_y, center_z);
+        vec3 up(up_x, up_y, up_z);
+        rend->cam.look_at(eye, center, up);
+        rend->on_display();
+        auto frame = rend->get_current_image();
+        memcpy(img_buff, frame.data(), frame.size() * sizeof(frame[0]));
     }
 }
