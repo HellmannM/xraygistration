@@ -12,7 +12,6 @@ renderlib = c.cdll.LoadLibrary("./src/match/librender.so")
 create_renderer_wrapper = renderlib.create_renderer
 create_renderer_wrapper.restype = c.c_void_p
 renderer = c.c_void_p(create_renderer_wrapper())
-print('p renderer=', renderer)
 
 arg_buffers = [c.create_string_buffer(b"./src/match/match"),
                c.create_string_buffer(b"../testfiles/Dummy_Paul_nifti/2__head_10_stx_head.nii"),
@@ -21,7 +20,6 @@ arg_buffers = [c.create_string_buffer(b"./src/match/match"),
               ]
 arg_ptrs    = (c.c_char_p*4)(*map(c.addressof, arg_buffers))
 renderlib.init_renderer(renderer, 4, arg_ptrs)
-print('p renderer=', renderer)
 
 get_width_wrapper = renderlib.get_width
 get_height_wrapper = renderlib.get_height
@@ -29,16 +27,11 @@ get_bpp_wrapper = renderlib.get_bpp
 get_width_wrapper.restype = c.c_int
 get_height_wrapper.restype = c.c_int
 get_bpp_wrapper.restype = c.c_int
-width = c.c_int(renderlib.get_width())
-height = c.c_int(renderlib.get_height())
-bpp = c.c_int(renderlib.get_bpp())
-print('width=', width)
-print('height=', height)
-print('bpp=', bpp)
-sys.exit()
+width = c.c_int(get_width_wrapper(renderer))
+height = c.c_int(get_height_wrapper(renderer))
+bpp = c.c_int(get_bpp_wrapper(renderer))
 
-image_buff = c.create_string_buffer(width * height * bpp)
-print('p renderer=', renderer)
+image_buff = c.create_string_buffer(width.value * height.value * bpp.value)
 print('before: ', image_buff[0], ', ', image_buff[1], ', ', image_buff[2], ', ', image_buff[3])
 eye_x = (c.c_float)(1000)
 eye_y = (c.c_float)(0)
