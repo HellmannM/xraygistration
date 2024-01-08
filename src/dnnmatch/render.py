@@ -4,6 +4,9 @@ import ctypes as c
 import numpy as np
 import sys
 
+import faulthandler
+faulthandler.enable()
+
 # Load C++ libs
 stdc      = c.cdll.LoadLibrary("libc.so.6")
 stdcpp    = c.cdll.LoadLibrary("libc++.so.1")
@@ -42,6 +45,7 @@ center_z = (c.c_float)(0)
 up_x = (c.c_float)(0)
 up_y = (c.c_float)(1)
 up_z = (c.c_float)(0)
+print('python: Call single_shot()')
 renderlib.single_shot(
         renderer,
         image_buff,
@@ -54,4 +58,6 @@ renderlib.single_shot(
         up_x,
         up_y,
         up_z)
-print('after: ', image_buff[0], ', ', image_buff[1], ', ', image_buff[2], ', ', image_buff[3])
+renderlib.destroy_renderer(renderer)
+#print('after: ', image_buff[0], ', ', image_buff[1], ', ', image_buff[2], ', ', image_buff[3])
+print('python: EOF')

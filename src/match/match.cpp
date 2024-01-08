@@ -169,7 +169,7 @@ struct renderer : viewer_type
     std::vector<vector<4, unorm<8>>> get_current_image();
     std::pair<vec3, vec3> find_closest_points(ray_type_cpu r1, ray_type_cpu r2);
 
-    void on_display();
+    void on_display(bool display = true);
 
 protected:
     void on_resize(int w, int h);
@@ -182,7 +182,7 @@ protected:
 // Display function, implements the volume rendering algorithm
 //
 
-void renderer::on_display()
+void renderer::on_display(bool display)
 {
     if (rt.mode() == host_device_rt::CPU)
     {
@@ -218,7 +218,8 @@ void renderer::on_display()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     rt.swap_buffers();
-    rt.display_color_buffer();
+    if (display)
+        rt.display_color_buffer();
 
     // enable overlay when in selection mode
     if (selected_point > 0)
@@ -1046,11 +1047,10 @@ extern "C"
 {
     void* create_renderer() { return new(std::nothrow) renderer; }
 
-    void destroy_renderer(void* rend_ptr) { reinterpret_cast<renderer*>(rend_ptr); }
+    void destroy_renderer(void* rend_ptr) { delete reinterpret_cast<renderer*>(rend_ptr); }
 
     int init_renderer(void* rend_ptr, int argc, char** argv)
     {
-        std::cout << "init: rend_ptr=" << rend_ptr << "\n";
         try
         {
             renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
@@ -1070,6 +1070,7 @@ extern "C"
             rend->add_manipulator( std::make_shared<zoom_manipulator>(rend->cam, mouse::Right) );
 
             //rend->event_loop();
+            rend->rt.resize(rend->width(), rend->height());
             std::cout << "init: width=" << rend->width() << "\n";
             std::cout << "init: height=" << rend->height() << "\n";
         }
@@ -1081,13 +1082,7 @@ extern "C"
         return EXIT_SUCCESS;
     }
 
-    int get_width(void* rend_ptr)// { return reinterpret_cast<renderer*>(rend_ptr)->width(); }
-    {
-        std::cout << "get_width: rend_ptr=" << rend_ptr << "\n";
-        auto r = reinterpret_cast<renderer*>(rend_ptr);
-        auto w = r->width();
-        std::cout << "get_width: width=" << w << "\n";
-    }
+    int get_width(void* rend_ptr) { return reinterpret_cast<renderer*>(rend_ptr)->width(); }
 
     int get_height(void* rend_ptr) { return reinterpret_cast<renderer*>(rend_ptr)->height(); }
 
@@ -1100,8 +1095,13 @@ extern "C"
         vec3 center(center_x, center_y, center_z);
         vec3 up(up_x, up_y, up_z);
         rend->cam.look_at(eye, center, up);
-        rend->on_display();
+        rend->on_display(false);
         auto frame = rend->get_current_image();
         memcpy(img_buff, frame.data(), frame.size() * sizeof(frame[0]));
+
+        auto img = cv::Mat(rend->height(), rend->width(), CV_8UC4, reinterpret_cast<void*>(frame.data()));
+        cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
+        cv::imshow("Display Image", img);
+        cv::waitKey(0);
     }
 }
