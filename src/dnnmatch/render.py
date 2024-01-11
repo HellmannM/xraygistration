@@ -4,6 +4,7 @@ import ctypes as c
 import numpy as np
 import sys
 
+import cv2
 import faulthandler
 faulthandler.enable()
 
@@ -34,8 +35,8 @@ width = c.c_int(get_width_wrapper(renderer))
 height = c.c_int(get_height_wrapper(renderer))
 bpp = c.c_int(get_bpp_wrapper(renderer))
 
-image_buff = c.create_string_buffer(width.value * height.value * bpp.value)
-print('before: ', image_buff[0], ', ', image_buff[1], ', ', image_buff[2], ', ', image_buff[3])
+image_buff_size = width.value * height.value * bpp.value
+image_buff = c.create_string_buffer(image_buff_size)
 eye_x = (c.c_float)(1000)
 eye_y = (c.c_float)(0)
 eye_z = (c.c_float)(0)
@@ -58,6 +59,16 @@ renderlib.single_shot(
         up_x,
         up_y,
         up_z)
+
+image_py_buff_t = c.pythonapi.PyMemoryView_FromMemory
+image_py_buff_t.restype = c.py_object
+image_py_buff = image_py_buff_t(image_buff, image_buff_size)
+image_py_arr = np.frombuffer(image_py_buff, np.uint8)
+image_py_arr.shape = (height.value, width.value, bpp.value)
+
+cv2.namedWindow("Display Image", cv2.WINDOW_AUTOSIZE);
+cv2.imshow("Display Image", image_py_arr);
+cv2.waitKey(0);
+
 renderlib.destroy_renderer(renderer)
-#print('after: ', image_buff[0], ', ', image_buff[1], ', ', image_buff[2], ', ', image_buff[3])
 print('python: EOF')

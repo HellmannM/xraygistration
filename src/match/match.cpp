@@ -1099,9 +1099,9 @@ extern "C"
         auto frame = rend->get_current_image();
         memcpy(img_buff, frame.data(), frame.size() * sizeof(frame[0]));
 
-        auto img = cv::Mat(rend->height(), rend->width(), CV_8UC4, reinterpret_cast<void*>(frame.data()));
-        cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
-        cv::imshow("Display Image", img);
-        cv::waitKey(0);
+        //auto img = cv::Mat(rend->height(), rend->width(), CV_8UC4, reinterpret_cast<void*>(frame.data()));
+        //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
+        //cv::imshow("Display Image", img);
+        //cv::waitKey(0);
     }
 }
