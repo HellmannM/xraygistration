@@ -35,8 +35,9 @@ width = c.c_int(get_width_wrapper(renderer))
 height = c.c_int(get_height_wrapper(renderer))
 bpp = c.c_int(get_bpp_wrapper(renderer))
 
-image_buff_size = width.value * height.value * bpp.value
-image_buff = c.create_string_buffer(image_buff_size)
+image_buff = np.zeros(shape=(height.value, width.value, bpp.value), dtype=np.uint8)
+image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
+
 eye_x = (c.c_float)(1000)
 eye_y = (c.c_float)(0)
 eye_z = (c.c_float)(0)
@@ -49,7 +50,7 @@ up_z = (c.c_float)(0)
 print('python: Call single_shot()')
 renderlib.single_shot(
         renderer,
-        image_buff,
+        image_buff_ptr,
         eye_x,
         eye_y,
         eye_z,
@@ -60,14 +61,8 @@ renderlib.single_shot(
         up_y,
         up_z)
 
-image_py_buff_t = c.pythonapi.PyMemoryView_FromMemory
-image_py_buff_t.restype = c.py_object
-image_py_buff = image_py_buff_t(image_buff, image_buff_size)
-image_py_arr = np.frombuffer(image_py_buff, np.uint8)
-image_py_arr.shape = (height.value, width.value, bpp.value)
-
 cv2.namedWindow("Display Image", cv2.WINDOW_AUTOSIZE);
-cv2.imshow("Display Image", image_py_arr);
+cv2.imshow("Display Image", image_buff);
 cv2.waitKey(0);
 
 renderlib.destroy_renderer(renderer)

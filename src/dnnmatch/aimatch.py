@@ -1,13 +1,14 @@
 # aimatch.py
 
 import ctypes as c
-import sys
 import matplotlib.pyplot as plotter_lib
 import numpy as np
 import PIL as image_lib
+import random as r
+import sys
 import tensorflow as tf
-from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Flatten
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 
@@ -37,26 +38,21 @@ renderer_width = c.c_int(get_width_wrapper(renderer))
 renderer_height = c.c_int(get_height_wrapper(renderer))
 renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
-def get_frame(arr)
-    image_buff_size = width.value * height.value * bpp.value
-    #TODO create numpy array and pass to ctypes instead of create_string_buffer
-    image_buff = c.create_string_buffer(image_buff_size)
-    eye_x =    (c.c_float)(arr[0])
-    eye_y =    (c.c_float)(arr[1])
-    eye_z =    (c.c_float)(arr[2])
-    center_x = (c.c_float)(arr[3])
-    center_y = (c.c_float)(arr[4])
-    center_z = (c.c_float)(arr[5])
-    up_x =     (c.c_float)(arr[6])
-    up_y =     (c.c_float)(arr[7])
-    up_z =     (c.c_float)(arr[8])
-    renderlib.single_shot(renderer, image_buff, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
-    image_py_buff_t = c.pythonapi.PyMemoryView_FromMemory
-    image_py_buff_t.restype = c.py_object
-    image_py_buff = image_py_buff_t(image_buff, image_buff_size)
-    image_py_arr = np.frombuffer(image_py_buff, np.uint8)
-    image_py_arr.shape = (height.value, width.value, bpp.value)
-    return image_py_arr
+def get_frame(camera):
+    image_buff = np.empty(shape=(renderer_width.value, renderer_height.value, renderer_bpp.value), dtype=np.uint8)
+    image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
+    eye_x =    (c.c_float)(camera[0])
+    eye_y =    (c.c_float)(camera[1])
+    eye_z =    (c.c_float)(camera[2])
+    center_x = (c.c_float)(camera[3])
+    center_y = (c.c_float)(camera[4])
+    center_z = (c.c_float)(camera[5])
+    up_x =     (c.c_float)(camera[6])
+    up_y =     (c.c_float)(camera[7])
+    up_z =     (c.c_float)(camera[8])
+    renderlib.single_shot(renderer, image_buff_ptr, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
+    #return image_buff
+    return image_buff[:, :, 0:3]
 # --------------------------------------------------------------------
 
 class DataGenerator(tf.keras.utils.Sequence):
@@ -86,9 +82,33 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         # Generate data
         for i in range(self.batch_size):
-            y[i] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+            #TODO get volume dims.
+            volume_dims = [500, 500, 500]
+            volume_center = [0, 0, 0]
+            eye_search_dist = [1500, 1500, 1500]
+            center_search_dist = [50, 50, 50]
+
+            eye = [
+                volume_dims[0] + r.random() * eye_search_dist[0],
+                volume_dims[1] + r.random() * eye_search_dist[1],
+                volume_dims[2] + r.random() * eye_search_dist[2]
+                ]
+            center = [
+                volume_center[0] + r.random() * center_search_dist[0],
+                volume_center[1] + r.random() * center_search_dist[1],
+                volume_center[2] + r.random() * center_search_dist[2]
+                ]
+            up = [r.random(), r.random(), r.random()]
+            if up == [0.0, 0.0, 0.0]:
+                up = [0.0, 1.0, 0.0]
+            # dir and up need to be orthogonal
+            cam_dir = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]]
+            orthogonal = np.cross(cam_dir, up)
+            up = np.cross(cam_dir, orthogonal)
+            up = up / np.linalg.norm(up)
+
+            y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
             X[i,] = get_frame(y[i])
-            #X[i,] = np.zeros((self.dim[0], self.dim[1], self.n_channels))
         
         X = tf.keras.applications.resnet_v2.preprocess_input(X, data_format='channels_last')
 
@@ -96,10 +116,10 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 
 # Parameters
-dim_x = renderer_width
-dim_y = renderer_height
+dim_x = renderer_width.value
+dim_y = renderer_height.value
 params = {'dim': (dim_x, dim_y),
-          'batch_size': 8,
+          'batch_size': 64,
           'n_channels': 3}  #n_channels must be 3 for resnet
 
 # Setup model
