@@ -8,10 +8,6 @@ import PIL as image_lib
 import random as r
 import sys
 import tensorflow as tf
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import Flatten
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import Adam
 
 # Renderer setup -----------------------------------------------------
 # Load C++ rendering libs
@@ -40,7 +36,7 @@ renderer_height = c.c_int(get_height_wrapper(renderer))
 renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
 def get_frame(camera):
-    image_buff = np.empty(shape=(renderer_width.value, renderer_height.value, renderer_bpp.value), dtype=np.uint8)
+    image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
     eye_y =    (c.c_float)(camera[1])
@@ -85,20 +81,16 @@ class DataGenerator(tf.keras.utils.Sequence):
             #TODO get volume dims.
             volume_dims = [500, 500, 500]
             volume_center = [0, 0, 0]
-            eye_search_dist = [200, 200, 200]
+            eye_search_dist = [10, 10, 10]
             #eye_search_dist = [1500, 1500, 1500]
-            center_search_dist = [50, 50, 50]
+            center_search_dist = [10, 10, 10]
 
+            #TODO make sure eye is outside of volume_dims
             eye = [
                 1000 + r.random() * eye_search_dist[0] - eye_search_dist[0]/2,
                    0 + r.random() * eye_search_dist[1] - eye_search_dist[1]/2,
                    0 + r.random() * eye_search_dist[2] - eye_search_dist[2]/2
                 ]
-#            eye = [
-#                volume_dims[0] + r.random() * eye_search_dist[0] - eye_search_dist[0]/2,
-#                volume_dims[1] + r.random() * eye_search_dist[1] - eye_search_dist[1]/2,
-#                volume_dims[2] + r.random() * eye_search_dist[2] - eye_search_dist[2]/2
-#                ]
             center = [
                 volume_center[0] + r.random() * center_search_dist[0] - center_search_dist[0]/2,
                 volume_center[1] + r.random() * center_search_dist[1] - center_search_dist[1]/2,
@@ -113,6 +105,8 @@ class DataGenerator(tf.keras.utils.Sequence):
 #            up = np.cross(cam_dir, orthogonal)
 #            up = up / np.linalg.norm(up)
             up = [0, 1, 0]
+#            eye = [1000, 0, 0]
+#            center = [0, 0, 0]
 
             y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
             X[i,] = get_frame(y[i])
@@ -123,14 +117,14 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 
 # Parameters
-dim_x = renderer_width.value
-dim_y = renderer_height.value
+dim_y = renderer_width.value
+dim_x = renderer_height.value
 params = {'dim': (dim_x, dim_y),
           'batch_size': 32,
           'n_channels': 3}  #n_channels must be 3 for resnet
 
 # Setup model
-model = Sequential()
+model = tf.keras.models.Sequential()
 # load from disk if present
 if os.path.isfile('trained_model.keras'):
     print('loading trained model...')
@@ -138,44 +132,43 @@ if os.path.isfile('trained_model.keras'):
 else:
     print('creating new model...')
     # add pretrained resnet model and make layers non-trainable
-    pretrained_model = tf.keras.applications.ResNet50V2(include_top=False,
+    resnet = tf.keras.applications.ResNet50V2(include_top=False,
                        input_shape=(dim_x, dim_y, 3),
                        pooling='avg',
                        weights='imagenet')
-    for each_layer in pretrained_model.layers:
-            each_layer.trainable=False
+    for layer in resnet.layers:
+        layer.trainable=False
+    #model.add(resnet)
+    pretrained_model = tf.keras.models.Model(resnet.input, resnet.layers[-3].output)
     model.add(pretrained_model)
-    # add a fully connected output layer
-    model.add(Flatten())
-    model.add(Dense(512, activation='relu'))
+    model.add(tf.keras.layers.AveragePooling2D(3))
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dense(2048, activation='relu'))
     # 3 vec3: eye, dir, up
-    model.add(Dense(9, activation='linear'))
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
+    model.add(tf.keras.layers.Dense(9, activation='linear'))
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
     model.summary()
 
 # Generators
-training_generator   = DataGenerator(batches_per_epoch=128, **params)
-validation_generator = DataGenerator(batches_per_epoch=32, **params)
+training_generator   = DataGenerator(batches_per_epoch=64, **params)
+validation_generator = DataGenerator(batches_per_epoch=8, **params)
 
 # Train model on dataset
 epochs=16
-history = model.fit(x=training_generator,
+fit_history = model.fit(x=training_generator,
                     validation_data=validation_generator,
                     epochs=epochs,
+                    shuffle=False,
                     use_multiprocessing=False,
                     workers=1)
 
 ## evaluate
-#plotter_lib.figure(figsize=(8, 8))
-#epochs_range = range(epochs)
-#plotter_lib.plot(epochs_range, history.history['mean_squared_error'], label="Training Accuracy")
-#plotter_lib.plot(epochs_range, history.history['val_mean_squared_error'], label="Validation Accuracy")
-#plotter_lib.axis(ymin=0, ymax=np.max(history.history['val_mean_squared_error']))
-#plotter_lib.grid()
-#plotter_lib.title('Model Accuracy')
-#plotter_lib.ylabel('Accuracy')
-#plotter_lib.xlabel('Epochs')
-#plotter_lib.legend(['train', 'validation'])
+fig, ax = plotter_lib.subplots()
+ax.plot(range(epochs), fit_history.history['mean_squared_error'], label='Training MSE')
+ax.plot(range(epochs), fit_history.history['val_mean_squared_error'], label='Validation MSE')
+ax.set(xlabel='Epochs', ylabel='Accuracy', title='Model Accuracy')
+ax.legend()
+fig.savefig('accuracy.png')
 #plotter_lib.show()
 
 
@@ -186,10 +179,10 @@ up = [0, 1, 0]
 test_cam = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
 test_image = get_frame(test_cam)
 test_prediction=model.predict(np.expand_dims(test_image, 0))
-print("Test: eye=", eye, " center=", center, " up=", up, "\n")
+print("Test: eye=", eye, " center=", center, " up=", up)
 print("Pred: eye=", test_prediction[0, 0:3], " center=", test_prediction[0, 3:6], " up=", test_prediction[0, 6:9], "\n")
 
 ## save model
-model.save("trained_model.keras")
+#model.save("trained_model.keras")
 
 renderlib.destroy_renderer(renderer)
