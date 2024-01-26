@@ -1071,8 +1071,6 @@ extern "C"
 
             //rend->event_loop();
             rend->rt.resize(rend->width(), rend->height());
-            std::cout << "init: width=" << rend->width() << "\n";
-            std::cout << "init: height=" << rend->height() << "\n";
         }
         catch (std::exception const& e)
         {
