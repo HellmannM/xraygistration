@@ -73,17 +73,15 @@ class DataGenerator(tf.keras.utils.Sequence):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
         X = np.empty((self.batch_size, *self.dim, self.n_channels), dtype=np.uint8)
-        #y = np.empty((self.batch_size, 9), dtype=np.float32)
-        y = np.empty((self.batch_size, 1), dtype=np.float32)
+        y = np.empty((self.batch_size, 9), dtype=np.float32)
 
         # Generate data
         for i in range(self.batch_size):
             #TODO get volume dims.
             volume_dims = [500, 500, 500]
             volume_center = [0, 0, 0]
-            eye_search_dist = [100, 100, 100]
-            #eye_search_dist = [1500, 1500, 1500]
-            center_search_dist = [10, 10, 10]
+            eye_search_dist = [1000, 1000, 1000]
+            center_search_dist = [100, 100, 100]
 
             #TODO make sure eye is outside of volume_dims
             eye = [
@@ -96,22 +94,18 @@ class DataGenerator(tf.keras.utils.Sequence):
                 volume_center[1] + r.random() * center_search_dist[1] - center_search_dist[1]/2,
                 volume_center[2] + r.random() * center_search_dist[2] - center_search_dist[2]/2
                 ]
-#            up = [r.random(), r.random(), r.random()]
-#            if up == [0.0, 0.0, 0.0]:
-#                up = [0.0, 1.0, 0.0]
-#            # dir and up need to be orthogonal
-#            cam_dir = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]]
-#            orthogonal = np.cross(cam_dir, up)
-#            up = np.cross(cam_dir, orthogonal)
-#            up = up / np.linalg.norm(up)
-            up = [0, 1, 0]
-#            eye = [1000, 0, 0]
-#            center = [0, 0, 0]
+            up = [r.random(), r.random(), r.random()]
+            if up == [0.0, 0.0, 0.0]:
+                up = [0.0, 1.0, 0.0]
+            # dir and up need to be orthogonal
+            # TODO chances that up and dir are colinear?...
+            cam_dir = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]]
+            orthogonal = np.cross(cam_dir, up)
+            up = np.cross(cam_dir, orthogonal)
+            up = up / np.linalg.norm(up)
 
-            #y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
-            #X[i,] = get_frame(y[i])
-            y[i] = [eye[0]]
-            X[i,] = get_frame([y[i], 0, 0, 0, 0, 0, 0, 1, 0])
+            y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
+            X[i,] = get_frame(y[i])
         
         X = tf.keras.applications.resnet_v2.preprocess_input(X, data_format='channels_last')
 
@@ -148,8 +142,8 @@ else:
     model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(64, activation='relu'))
     # 3 vec3: eye, dir, up
-    model.add(tf.keras.layers.Dense(1, activation='linear'))
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), loss='mean_squared_error', metrics=['mean_squared_error'])
+    model.add(tf.keras.layers.Dense(9, activation='linear'))
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
     model.summary()
 
@@ -162,7 +156,7 @@ print("start training...")
 print("Learning rate: ", model.optimizer.learning_rate.numpy())
 fit_history = model.fit(x=training_generator,
                     validation_data=validation_generator,
-                    epochs=20,
+                    epochs=40,
                     shuffle=False,
                     use_multiprocessing=False,
                     workers=1)
@@ -172,7 +166,7 @@ model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mea
 print("Learning rate: ", model.optimizer.learning_rate.numpy())
 fit_history = model.fit(x=training_generator,
                     validation_data=validation_generator,
-                    epochs=20,
+                    epochs=40,
                     shuffle=False,
                     use_multiprocessing=False,
                     workers=1)
@@ -180,7 +174,7 @@ model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='me
 print("Learning rate: ", model.optimizer.learning_rate.numpy())
 fit_history = model.fit(x=training_generator,
                     validation_data=validation_generator,
-                    epochs=25,
+                    epochs=50,
                     shuffle=False,
                     use_multiprocessing=False,
                     workers=1)
@@ -205,8 +199,8 @@ test_image = get_frame(test_cam)
 preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
-#print("Pred: eye=", test_prediction[0, 0:3], " center=", test_prediction[0, 3:6], " up=", test_prediction[0, 6:9], "\n")
-print("Pred: eye.x=", test_prediction[0, 0], "\n")
+print("Pred: eye=", test_prediction[0, 0:3], " center=", test_prediction[0, 3:6], " up=", test_prediction[0, 6:9], "\n")
+#print("Pred: eye.x=", test_prediction[0, 0], "\n")
 
 ## save model
 #model.save("trained_model.keras")
