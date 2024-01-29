@@ -23,6 +23,7 @@ if [ $BUILD_VSNRAY == "1" ]; then
         -DVSNRAY_ENABLE_VIEWER=OFF \
         -DVSNRAY_ENABLE_PEDANTIC=OFF \
         -DVSNRAY_ENABLE_PTEX=OFF
+    make clean
     make -j$NUM_CORES
     popd 
 fi
@@ -40,6 +41,7 @@ if [ $BUILD_DESKVOX == "1" ]; then
         -DCUDA_NVCC_FLAGS="-I$VISIONARAY_DIR/build/config" \
         -DVISIONARAY_INCLUDE_DIR="$VISIONARAY_DIR/include" \
         -DVISIONARAY_LIBRARY="$VISIONARAY_DIR/build/src/visionaray/libvisionaray.so"
+    make clean
     make -j$NUM_CORES
     popd 
 fi
