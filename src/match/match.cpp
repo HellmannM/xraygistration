@@ -169,9 +169,10 @@ struct renderer : viewer_type
     std::vector<vector<4, unorm<8>>> get_current_image();
     std::pair<vec3, vec3> find_closest_points(ray_type_cpu r1, ray_type_cpu r2);
 
-    void on_display(bool display = true);
+    void on_display(bool display);
 
 protected:
+    void on_display();
     void on_resize(int w, int h);
     void on_key_press(visionaray::key_event const& event);
 
@@ -181,6 +182,11 @@ protected:
 //-------------------------------------------------------------------------------------------------
 // Display function, implements the volume rendering algorithm
 //
+
+void renderer::on_display()
+{
+    on_display(true);
+}
 
 void renderer::on_display(bool display)
 {
