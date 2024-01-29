@@ -122,7 +122,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 dim_y = renderer_width.value
 dim_x = renderer_height.value
 params = {'dim': (dim_x, dim_y),
-          'batch_size': 1,
+          'batch_size': 16,
           'n_channels': 3}  #n_channels must be 3 for resnet
 
 # Setup model
@@ -143,28 +143,44 @@ else:
     for layer in resnet.layers:
         layer.trainable=False
     model.add(resnet)
-    #pretrained_model = tf.keras.models.Model(resnet.input, resnet.layers[-3].output)
-    #model.add(pretrained_model)
 
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
-    #model.add(tf.keras.layers.Dense(8192, activation='relu'))
+    model.add(tf.keras.layers.Dense(64, activation='relu'))
     # 3 vec3: eye, dir, up
     model.add(tf.keras.layers.Dense(1, activation='linear'))
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), loss='mean_squared_error', metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
     model.summary()
 
 # Generators
-training_generator   = DataGenerator(batches_per_epoch=1, **params)
-validation_generator = DataGenerator(batches_per_epoch=1, **params)
+training_generator   = DataGenerator(batches_per_epoch=32, **params)
+validation_generator = DataGenerator(batches_per_epoch=4, **params)
 
 # Train model on dataset
-epochs=500
 print("start training...")
+print("Learning rate: ", model.optimizer.learning_rate.numpy())
 fit_history = model.fit(x=training_generator,
                     validation_data=validation_generator,
-                    epochs=epochs,
+                    epochs=20,
+                    shuffle=False,
+                    use_multiprocessing=False,
+                    workers=1)
+for layer in resnet.layers:
+    layer.trainable=True
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
+print("Learning rate: ", model.optimizer.learning_rate.numpy())
+fit_history = model.fit(x=training_generator,
+                    validation_data=validation_generator,
+                    epochs=20,
+                    shuffle=False,
+                    use_multiprocessing=False,
+                    workers=1)
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mean_squared_error', metrics=['mean_squared_error'])
+print("Learning rate: ", model.optimizer.learning_rate.numpy())
+fit_history = model.fit(x=training_generator,
+                    validation_data=validation_generator,
+                    epochs=25,
                     shuffle=False,
                     use_multiprocessing=False,
                     workers=1)
@@ -186,7 +202,8 @@ center = [0, 0, 0]
 up = [0, 1, 0]
 test_cam = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
 test_image = get_frame(test_cam)
-test_prediction=model.predict(np.expand_dims(test_image, axis=0))
+preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
+test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
 #print("Pred: eye=", test_prediction[0, 0:3], " center=", test_prediction[0, 3:6], " up=", test_prediction[0, 6:9], "\n")
 print("Pred: eye.x=", test_prediction[0, 0], "\n")
