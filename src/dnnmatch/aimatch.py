@@ -9,7 +9,7 @@ import random as r
 import sys
 import tensorflow as tf
 
-# Renderer setup -----------------------------------------------------
+## Renderer setup -----------------------------------------------------
 # Load C++ rendering libs
 stdc      = c.cdll.LoadLibrary("libc.so.6")
 stdcpp    = c.cdll.LoadLibrary("libc++.so.1")
@@ -49,8 +49,8 @@ def get_frame(camera):
     up_z =     (c.c_float)(camera[8])
     renderlib.single_shot(renderer, image_buff_ptr, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
     return image_buff[:, :, 0:3]
-# --------------------------------------------------------------------
 
+## Generators ----------------------------------------------------------
 class DataGenerator(tf.keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, dim=(32,32), batch_size=128, batches_per_epoch=128, n_channels=3):
@@ -69,6 +69,12 @@ class DataGenerator(tf.keras.utils.Sequence):
         X, y = self.__data_generation()
         return X, y
 
+    def sample_on_unit_sphere(self):
+        'Sample point on 3-dim unit sphere'
+        vec = np.random.standard_normal(size=3)
+        vec /= np.linalg.norm(vec, axis=0)
+        return vec
+
     def __data_generation(self):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
@@ -78,31 +84,22 @@ class DataGenerator(tf.keras.utils.Sequence):
         # Generate data
         for i in range(self.batch_size):
             #TODO get volume dims.
-            volume_dims = [500, 500, 500]
+            volume_radius = 500
             volume_center = [0, 0, 0]
-            eye_search_dist = [1000, 1000, 1000]
-            center_search_dist = [100, 100, 100]
+            eye_search_radius_inner = volume_radius * 1.2
+            eye_search_radius_outer = 1000
+            center_search_radius = 100
 
-            #TODO make sure eye is outside of volume_dims
-            eye = [
-                1000 + r.random() * eye_search_dist[0] - eye_search_dist[0]/2,
-                   0 + r.random() * eye_search_dist[1] - eye_search_dist[1]/2,
-                   0 + r.random() * eye_search_dist[2] - eye_search_dist[2]/2
-                ]
-            center = [
-                volume_center[0] + r.random() * center_search_dist[0] - center_search_dist[0]/2,
-                volume_center[1] + r.random() * center_search_dist[1] - center_search_dist[1]/2,
-                volume_center[2] + r.random() * center_search_dist[2] - center_search_dist[2]/2
-                ]
-            up = [r.random(), r.random(), r.random()]
-            if up == [0.0, 0.0, 0.0]:
-                up = [0.0, 1.0, 0.0]
+            eye    = volume_center + self.sample_on_unit_sphere() * np.random.uniform(eye_search_radius_inner, eye_search_radius_outer)
+            center = volume_center + self.sample_on_unit_sphere() * np.random.uniform(0, center_search_radius)
+            up     = self.sample_on_unit_sphere()
+
             # dir and up need to be orthogonal
             # TODO chances that up and dir are colinear?...
             cam_dir = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]]
             orthogonal = np.cross(cam_dir, up)
             up = np.cross(cam_dir, orthogonal)
-            up = up / np.linalg.norm(up)
+            up /= np.linalg.norm(up)
 
             y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
             X[i,] = get_frame(y[i])
@@ -112,6 +109,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         return X, y
 
 
+## Model ---------------------------------------------------------------
 # Parameters
 dim_y = renderer_width.value
 dim_x = renderer_height.value
@@ -121,75 +119,81 @@ params = {'dim': (dim_x, dim_y),
 
 # Setup model
 model = tf.keras.models.Sequential()
-# load from disk if present
+# up vec is normalized. incr loss weights since error is expected to be smaller than for eye/center.
+weight_eye = 0.2
+weight_center = 0.2
+weight_up = 0.6
+loss_weights = [weight_eye/3, weight_eye/3, weight_eye/3, weight_center/3, weight_center/3, weight_center/3, weight_up/3, weight_up/3, weight_up/3]
 if os.path.isfile('trained_model.keras'):
     print('loading trained model...')
     model = tf.keras.models.load_model('trained_model.keras')
 else:
     print('creating new model...')
-    model.add(tf.keras.layers.Resizing(height=224, width=224, interpolation="bilinear", crop_to_aspect_ratio=True))
-    # add pretrained resnet model and make layers non-trainable
+    model.add(tf.keras.layers.Resizing(height=224, width=224, interpolation='bilinear', crop_to_aspect_ratio=True))
     resnet = tf.keras.applications.ResNet50V2(include_top=False,
                        #input_shape=(dim_x, dim_y, 3),
                        input_shape=(224, 224, 3),
-                       pooling="None",
-                       weights="imagenet")
+                       pooling='None',
+                       weights='imagenet')
     for layer in resnet.layers:
         layer.trainable=False
     model.add(resnet)
-
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(64, activation='relu'))
-    # 3 vec3: eye, dir, up
     model.add(tf.keras.layers.Dense(9, activation='linear'))
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
-    model.summary()
+    #model.summary()
 
 # Generators
 training_generator   = DataGenerator(batches_per_epoch=32, **params)
 validation_generator = DataGenerator(batches_per_epoch=4, **params)
 
-# Train model on dataset
-print("start training...")
-print("Learning rate: ", model.optimizer.learning_rate.numpy())
-fit_history = model.fit(x=training_generator,
-                    validation_data=validation_generator,
-                    epochs=40,
-                    shuffle=False,
-                    use_multiprocessing=False,
-                    workers=1)
-for layer in resnet.layers:
-    layer.trainable=True
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mean_squared_error', metrics=['mean_squared_error'])
-print("Learning rate: ", model.optimizer.learning_rate.numpy())
-fit_history = model.fit(x=training_generator,
-                    validation_data=validation_generator,
-                    epochs=40,
-                    shuffle=False,
-                    use_multiprocessing=False,
-                    workers=1)
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mean_squared_error', metrics=['mean_squared_error'])
-print("Learning rate: ", model.optimizer.learning_rate.numpy())
-fit_history = model.fit(x=training_generator,
-                    validation_data=validation_generator,
-                    epochs=50,
-                    shuffle=False,
-                    use_multiprocessing=False,
-                    workers=1)
+def plot_step(fit_history, epochs, index):
+    fig, ax = plotter_lib.subplots()
+    ax.plot(range(epochs), fit_history.history['mean_squared_error'], label='Training MSE')
+    ax.plot(range(epochs), fit_history.history['val_mean_squared_error'], label='Validation MSE')
+    ax.set(xlabel='Epochs', ylabel='Accuracy', title='Model Accuracy')
+    ax.legend()
+    fig.savefig('accuracy' + str(index) + '.png')
+    #plotter_lib.show()
 
-### evaluate
-#fig, ax = plotter_lib.subplots()
-#ax.plot(range(epochs), fit_history.history['mean_squared_error'], label='Training MSE')
-#ax.plot(range(epochs), fit_history.history['val_mean_squared_error'], label='Validation MSE')
-#ax.set(xlabel='Epochs', ylabel='Accuracy', title='Model Accuracy')
-#ax.legend()
-#fig.savefig('accuracy.png')
-##plotter_lib.show()
+def run_step(model, training_generator, validation_generator, step, epochs, learning_rate):
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
+    model.summary()
+    print("Learning rate: ", model.optimizer.learning_rate.numpy())
+    fit_history = model.fit(x=training_generator, validation_data=validation_generator, epochs=epochs, shuffle=False, use_multiprocessing=False, workers=1)
+    plot_step(fit_history, epochs, step)
+    
+
+## Training ------------------------------------------------------------
+step = 1
+epochs = 50
+learning_rate=1e-3
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+
+step = 2
+epochs = 50
+learning_rate=1e-3
+print("making resnet trainable...")
+model.get_layer(name='resnet50v2').trainable=True
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+
+step = 3
+epochs = 50
+learning_rate=1e-4
+model.get_layer(name='resnet50v2').trainable=True
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+
+step = 4
+epochs = 50
+learning_rate=1e-5
+model.get_layer(name='resnet50v2').trainable=True
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
-## make prediction
+## Prediction ----------------------------------------------------------
 print("predict...")
 eye = [1000, 0, 0]
 center = [0, 0, 0]
@@ -199,10 +203,9 @@ test_image = get_frame(test_cam)
 preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
-print("Pred: eye=", test_prediction[0, 0:3], " center=", test_prediction[0, 3:6], " up=", test_prediction[0, 6:9], "\n")
-#print("Pred: eye.x=", test_prediction[0, 0], "\n")
+print("Pred: eye=", test_prediction[0, 0:3].numpy(), " center=", test_prediction[0, 3:6].numpy(), " up=", test_prediction[0, 6:9].numpy(), "\n")
 
-## save model
-#model.save("trained_model.keras")
+## Save Model ----------------------------------------------------------
+model.save("trained_model.keras")
 
 renderlib.destroy_renderer(renderer)
