@@ -35,7 +35,7 @@ renderer_width = c.c_int(get_width_wrapper(renderer))
 renderer_height = c.c_int(get_height_wrapper(renderer))
 renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
-def get_frame(camera):
+def get_frame(camera, random_vignette):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -48,6 +48,14 @@ def get_frame(camera):
     up_y =     (c.c_float)(camera[7])
     up_z =     (c.c_float)(camera[8])
     renderlib.single_shot(renderer, image_buff_ptr, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
+    if random_vignette == True:
+        x_min = np.random.randint(renderer_width.value * 0.2, renderer_width.value * 0.45)
+        x_max = np.random.randint(renderer_width.value * 0.55, renderer_width.value * 0.8)
+        y_min = np.random.randint(renderer_height.value * 0.2, renderer_height.value * 0.45)
+        y_max = np.random.randint(renderer_height.value * 0.55, renderer_height.value * 0.8)
+        vignetted = np.full(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8, fill_value=255)
+        vignetted[y_min:y_max, x_min:x_max] = image_buff[y_min:y_max, x_min:x_max]
+        image_buff = vignetted
     return image_buff[:, :, 0:3]
 
 ## Generators ----------------------------------------------------------
@@ -101,8 +109,16 @@ class DataGenerator(tf.keras.utils.Sequence):
             up = np.cross(cam_dir, orthogonal)
             up /= np.linalg.norm(up)
 
-            y[i] = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
-            X[i,] = get_frame(y[i])
+            # mapping ranges to [0,1]: eye, center: -10.000,10.000; up: -1,1
+            true_input = np.concatenate((eye, center, up))
+            scaled_input = np.concatenate((eye / 20000 + 0.5, center / 20000 + 0.5, up / 2 + 0.5))
+
+            y[i] = scaled_input
+            X[i,] = get_frame(true_input, random_vignette=True)
+            #import cv2 as cv
+            #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
+            #cv.imshow("Display Image", X[i,]);
+            #cv.waitKey(0);
         
         X = tf.keras.applications.resnet_v2.preprocess_input(X, data_format='channels_last')
 
@@ -141,7 +157,8 @@ else:
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(64, activation='relu'))
-    model.add(tf.keras.layers.Dense(9, activation='linear'))
+    model.add(tf.keras.layers.Dense(9, activation='sigmoid'))
+    #model.add(tf.keras.layers.Dense(9, activation='linear'))
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
     #model.summary()
@@ -169,28 +186,28 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
 
 ## Training ------------------------------------------------------------
 step = 1
-epochs = 50
+epochs = 10
 learning_rate=1e-3
+print("freeze resnet layers...")
+model.get_layer(name='resnet50v2').trainable=False
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 2
-epochs = 50
+epochs = 20
 learning_rate=1e-3
-print("making resnet trainable...")
+print("train resnet layers...")
 model.get_layer(name='resnet50v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 3
-epochs = 50
+epochs = 20
 learning_rate=1e-4
-model.get_layer(name='resnet50v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
-step = 4
-epochs = 50
-learning_rate=1e-5
-model.get_layer(name='resnet50v2').trainable=True
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+#step = 4
+#epochs = 20
+#learning_rate=1e-5
+#run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
@@ -199,13 +216,18 @@ eye = [1000, 0, 0]
 center = [0, 0, 0]
 up = [0, 1, 0]
 test_cam = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
-test_image = get_frame(test_cam)
+test_image = get_frame(test_cam, True)
+#import cv2 as cv
+#cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
+#cv.imshow("Display Image", test_image);
+#cv.waitKey(0);
 preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
-print("Pred: eye=", test_prediction[0, 0:3].numpy(), " center=", test_prediction[0, 3:6].numpy(), " up=", test_prediction[0, 6:9].numpy(), "\n")
+#print("Pred: eye=", test_prediction[0, 0:3].numpy(), " center=", test_prediction[0, 3:6].numpy(), " up=", test_prediction[0, 6:9].numpy(), "\n")
+print("Pred: eye=", (test_prediction[0, 0:3].numpy() -0.5)*20000, " center=", (test_prediction[0, 3:6].numpy() -0.5)*20000, " up=", (test_prediction[0, 6:9].numpy() -0.5)*2, "\n")
 
 ## Save Model ----------------------------------------------------------
-model.save("trained_model.keras")
+#model.save("trained_model.keras")
 
 renderlib.destroy_renderer(renderer)
