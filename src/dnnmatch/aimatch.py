@@ -35,7 +35,7 @@ renderer_width = c.c_int(get_width_wrapper(renderer))
 renderer_height = c.c_int(get_height_wrapper(renderer))
 renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
-def get_frame(camera, random_vignette):
+def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -47,7 +47,10 @@ def get_frame(camera, random_vignette):
     up_x =     (c.c_float)(camera[6])
     up_y =     (c.c_float)(camera[7])
     up_z =     (c.c_float)(camera[8])
-    renderlib.single_shot(renderer, image_buff_ptr, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
+    if random_integration_coefficient == True:
+        random_integration_coefficient *= np.random.uniform(0.6, 1.15);
+    int_coeff = (c.c_float)(integration_coefficient)
+    renderlib.single_shot(renderer, image_buff_ptr, int_coeff, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
     if random_vignette == True:
         x_min = np.random.randint(renderer_width.value * 0.2, renderer_width.value * 0.45)
         x_max = np.random.randint(renderer_width.value * 0.55, renderer_width.value * 0.8)
@@ -114,7 +117,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             scaled_input = np.concatenate((eye / 20000 + 0.5, center / 20000 + 0.5, up / 2 + 0.5))
 
             y[i] = scaled_input
-            X[i,] = get_frame(true_input, random_vignette=True)
+            X[i,] = get_frame(true_input, random_vignette=True, random_integration_coefficient=True)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
@@ -135,10 +138,9 @@ params = {'dim': (dim_x, dim_y),
 
 # Setup model
 model = tf.keras.models.Sequential()
-# up vec is normalized. incr loss weights since error is expected to be smaller than for eye/center.
-weight_eye = 0.2
-weight_center = 0.2
-weight_up = 0.6
+weight_eye    = 0.4 # mapping [0,1] to [-10000,10000]
+weight_center = 0.4 # mapping [0,1] to [-10000,10000]
+weight_up     = 0.2 # mapping [0,1] to [-1,1]
 loss_weights = [weight_eye/3, weight_eye/3, weight_eye/3, weight_center/3, weight_center/3, weight_center/3, weight_up/3, weight_up/3, weight_up/3]
 if os.path.isfile('trained_model.keras'):
     print('loading trained model...')
@@ -186,28 +188,28 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
 
 ## Training ------------------------------------------------------------
 step = 1
-epochs = 10
+epochs = 20
 learning_rate=1e-3
 print("freeze resnet layers...")
 model.get_layer(name='resnet50v2').trainable=False
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 2
-epochs = 20
+epochs = 50
 learning_rate=1e-3
 print("train resnet layers...")
 model.get_layer(name='resnet50v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 3
-epochs = 20
+epochs = 50
 learning_rate=1e-4
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
-#step = 4
-#epochs = 20
-#learning_rate=1e-5
-#run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+step = 4
+epochs = 50
+learning_rate=1e-5
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
@@ -216,7 +218,7 @@ eye = [1000, 0, 0]
 center = [0, 0, 0]
 up = [0, 1, 0]
 test_cam = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
-test_image = get_frame(test_cam, True)
+test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
 #import cv2 as cv
 #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
 #cv.imshow("Display Image", test_image);

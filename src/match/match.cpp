@@ -1092,9 +1092,14 @@ extern "C"
 
     int get_bpp(void* rend_ptr) { return 4; }
 
-    void single_shot(void* rend_ptr, void* img_buff, float eye_x, float eye_y, float eye_z, float center_x, float center_y, float center_z, float up_x, float up_y, float up_z)
+    void single_shot(
+            void* rend_ptr, void* img_buff, float int_coeff,
+            float eye_x, float eye_y, float eye_z,
+            float center_x, float center_y, float center_z,
+            float up_x, float up_y, float up_z)
     {
         renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
+        rend->integration_coefficient = int_coeff;
         vec3 eye(eye_x, eye_y, eye_z);
         vec3 center(center_x, center_y, center_z);
         vec3 up(up_x, up_y, up_z);
