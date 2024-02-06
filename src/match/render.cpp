@@ -35,7 +35,7 @@ void render_cpp(
         //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
         auto hit_rec = intersect(ray, bbox);
-        auto t = hit_rec.tnear;
+        auto t = max(S(0.0), hit_rec.tnear);
 
         result.color = C(0.0);
         float line_integral = 0.0f;

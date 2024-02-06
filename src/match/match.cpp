@@ -286,7 +286,8 @@ void renderer::search_2d2d()
     double fy = 0.5 * ((double)viewport.h - 1) / std::tan(0.5 * camera.fovy()); // fy=462.322
     double cx = ((double)viewport.w - 1) / 2.0; // (500-1)/2=249.5
     double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
-    double camera_matrix_data[] = {fy, 0, cx, 0, fy, cy, 0, 0, 1}; // TODO using fy instead of fx but why?
+    fx = fy; // TODO doesn't work with fy...
+    double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
 
     //auto homography = cv::findHomography(query_points, reference_points, cv::RANSAC);
@@ -386,8 +387,7 @@ size_t renderer::search_3d2d()
     fy = 463.53; // TODO gives best values close to starting point?!
     double cx = ((double)viewport.w - 1) / 2.0; // (500-1)/2=249.5
     double cy = ((double)viewport.h - 1) / 2.0; // (384-1)/2=191.5
-    // doesn't like fx, works good with fy?!
-    fx = fy;
+    fx = fy; //TODO doesn't like fx, works good with fy?!
     double camera_matrix_data[] = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
     // opencv stores in row-major order
     cv::Mat camera_matrix = cv::Mat(3, 3, CV_64F, camera_matrix_data);
@@ -686,13 +686,25 @@ void renderer::on_key_press(key_event const& event)
         break;
 
     case '+':
-        integration_coefficient += 0.0000001f;
-        std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        if (event.modifiers() == 0x00000004)
+        {
+            cam.perspective(cam.fovy() + 0.05, cam.aspect(), cam.z_near(), cam.z_far());
+        } else
+        {
+            integration_coefficient += 0.0000001f;
+            std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        }
         break;
 
     case '-':
-        integration_coefficient -= 0.0000001f;
-        std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        if (event.modifiers() == 0x00000004)
+        {
+            cam.perspective(cam.fovy() - 0.05, cam.aspect(), cam.z_near(), cam.z_far());
+        } else
+        {
+            integration_coefficient -= 0.0000001f;
+            std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+        }
         break;
 
     case keyboard::key::F1:
@@ -1013,7 +1025,6 @@ std::pair<vec3, vec3> renderer::find_closest_points(ray_type_cpu r1, ray_type_cp
 //-------------------------------------------------------------------------------------------------
 // Main function, performs initialization
 //
-
 int main(int argc, char** argv)
 {
     renderer rend;
