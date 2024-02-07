@@ -93,6 +93,8 @@ struct renderer : viewer_type
         , matcher()
         , selected_point(0)
         , selected_pixels()
+        , fovx(0.314159)
+        , fovy(0.314159)
     {
         // Add cmdline options
         add_cmdline_option( support::cl::makeOption<std::string&>(
@@ -114,6 +116,26 @@ struct renderer : viewer_type
             support::cl::init(reference_image_filename)
             ) );
 
+        add_cmdline_option( support::cl::makeOption<float&>(
+            support::cl::Parser<>(),
+            "fovx",
+            support::cl::Desc("FoV - X (in radians)"),
+            //support::cl::Positional,
+            //support::cl::Optional,
+            support::cl::ArgRequired,
+            support::cl::init(fovx)
+            ) );
+
+        add_cmdline_option( support::cl::makeOption<float&>(
+            support::cl::Parser<>(),
+            "fovy",
+            support::cl::Desc("FoV - Y (in radians)"),
+            //support::cl::Positional,
+            //support::cl::Optional,
+            support::cl::ArgRequired,
+            support::cl::init(fovy)
+            ) );
+
 #if VSNRAY_COMMON_HAVE_CUDA
         add_cmdline_option( support::cl::makeOption<host_device_rt::mode_type&>({
                 { "cpu", host_device_rt::CPU, "Rendering on the CPU" },
@@ -128,32 +150,34 @@ struct renderer : viewer_type
     }
 
     // volume rendering
-    aabb                                                bbox;
-    pinhole_camera                                      cam;
-    host_device_rt                                      rt;
-    tiled_sched<ray_type_cpu>                           host_sched;
-    volume_t                                            volume;
-    volume_ref_t                                        volume_ref;
+    aabb                        bbox;
+    pinhole_camera              cam;
+    host_device_rt              rt;
+    tiled_sched<ray_type_cpu>   host_sched;
+    volume_t                    volume;
+    volume_ref_t                volume_ref;
+    float                       fovx;
+    float                       fovy;
 #if VSNRAY_COMMON_HAVE_CUDA
-    cuda_sched<ray_type_gpu>                            device_sched;
-    cuda_volume_t                                       device_volume;
-    cuda_volume_ref_t                                   device_volume_ref;
+    cuda_sched<ray_type_gpu>    device_sched;
+    cuda_volume_t               device_volume;
+    cuda_volume_ref_t           device_volume_ref;
 #endif
-    std::string                                         volume_filename;
-    std::string                                         reference_image_filename;
-    vvVolDesc*                                          vd;
-    virvo::PixelFormat                                  texture_format;
-    float                                               delta;
-    float                                               integration_coefficient;
-    vec3                                                bgcolor;
-    vec2f                                               value_range;
+    std::string                 volume_filename;
+    std::string                 reference_image_filename;
+    vvVolDesc*                  vd;
+    virvo::PixelFormat          texture_format;
+    float                       delta;
+    float                       integration_coefficient;
+    vec3                        bgcolor;
+    vec2f                       value_range;
     // matcher
-    orb_matcher                                         matcher;
+    orb_matcher                 matcher;
     // pixel select
-    int                                                 selected_point;
-    vec2                                                selected_pixels[4];
-    pinhole_camera                                      saved_cameras[2];
-    ray_type_cpu                                        saved_rays[4];
+    int                         selected_point;
+    vec2                        selected_pixels[4];
+    pinhole_camera              saved_cameras[2];
+    ray_type_cpu                saved_rays[4];
 
     void load_volume();
     void load_reference_image();
@@ -629,7 +653,7 @@ void renderer::on_resize(int w, int h)
 {
     cam.set_viewport(0, 0, w, h);
     float aspect = w / static_cast<float>(h);
-    cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
+    cam.perspective(cam.fovy(), aspect, 0.001f, 1000.0f);
     rt.resize(w, h);
 
     viewer_type::on_resize(w, h);
@@ -688,7 +712,8 @@ void renderer::on_key_press(key_event const& event)
     case '+':
         if (event.modifiers() == 0x00000004)
         {
-            cam.perspective(cam.fovy() + 0.05, cam.aspect(), cam.z_near(), cam.z_far());
+            cam.perspective(cam.fovy() + 0.01, cam.aspect(), cam.z_near(), cam.z_far());
+            std::cout << "FoV Y = " << cam.fovy() << "rad / " << constants::radians_to_degrees<float>() * cam.fovy() << "°\n";
         } else
         {
             integration_coefficient += 0.0000001f;
@@ -699,7 +724,8 @@ void renderer::on_key_press(key_event const& event)
     case '-':
         if (event.modifiers() == 0x00000004)
         {
-            cam.perspective(cam.fovy() - 0.05, cam.aspect(), cam.z_near(), cam.z_far());
+            cam.perspective(cam.fovy() - 0.01, cam.aspect(), cam.z_near(), cam.z_far());
+            std::cout << "FoV Y = " << cam.fovy() << "rad / " << constants::radians_to_degrees<float>() * cam.fovy() << "°\n";
         } else
         {
             integration_coefficient -= 0.0000001f;
@@ -1046,8 +1072,12 @@ int main(int argc, char** argv)
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 
-    rend.cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
+    //rend.cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
+    std::cout << "rend fov: " << constants::radians_to_degrees<float>() * rend.fovy << "\n";
+    rend.cam.perspective(rend.fovy, aspect, 0.001f, 100000.0f);
+    std::cout << "cam  fov: " << constants::radians_to_degrees<float>() * rend.cam.fovy() << "\n";
     rend.cam.view_all( rend.bbox );
+    std::cout << "cam  fov: " << constants::radians_to_degrees<float>() * rend.cam.fovy() << "\n";
 
     rend.add_manipulator( std::make_shared<arcball_manipulator>(rend.cam, mouse::Left) );
     rend.add_manipulator( std::make_shared<pan_manipulator>(rend.cam, mouse::Middle) );
@@ -1077,7 +1107,7 @@ extern "C"
 
             float aspect = rend->width() / static_cast<float>(rend->height());
 
-            rend->cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
+            rend->cam.perspective(rend.fovy, aspect, 0.001f, 1000.0f);
             rend->cam.view_all( rend->bbox );
 
             rend->add_manipulator( std::make_shared<arcball_manipulator>(rend->cam, mouse::Left) );

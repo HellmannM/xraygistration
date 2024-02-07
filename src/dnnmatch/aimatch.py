@@ -9,6 +9,18 @@ import random as r
 import sys
 import tensorflow as tf
 
+## CT invariables -----------------------------------------------------
+# Read dicom data from existing ct image
+import dicomreader as dr
+dicom_path = "../testfiles/Bohr_Bruno_dicom/Abdomen - R202108130920122/Abdomen_Einzelaufnahme_1/IM-0001-0001.dcm"
+#TODO dicom and nii files as args
+#if len(sys.argv) > 1:
+#    dicom_path = sys.argv[1]
+print("Reading file: ", dicom_path)
+dd = dr.read_dicom(dicom_path)
+print(dd)
+
+
 ## Renderer setup -----------------------------------------------------
 # Load C++ rendering libs
 stdc      = c.cdll.LoadLibrary("libc.so.6")
@@ -21,10 +33,14 @@ renderer = c.c_void_p(create_renderer_wrapper())
 arg_buffers = [c.create_string_buffer(b"./src/match/match"),
                c.create_string_buffer(b"../testfiles/Dummy_Paul_nifti/2__head_10_stx_head.nii"),
                c.create_string_buffer(b"-device"),
-               c.create_string_buffer(b"gpu")
+               c.create_string_buffer(b"gpu"),
+               c.create_string_buffer(b"-fovx"),
+               c.create_string_buffer(str(dd.fov_x_rad).encode("UTF-8")),
+               c.create_string_buffer(b"-fovy"),
+               c.create_string_buffer(str(dd.fov_y_rad).encode("UTF-8"))
               ]
-arg_ptrs    = (c.c_char_p*4)(*map(c.addressof, arg_buffers))
-renderlib.init_renderer(renderer, 4, arg_ptrs)
+arg_ptrs    = (c.c_char_p * len(arg_buffers))(*map(c.addressof, arg_buffers))
+renderlib.init_renderer(renderer, len(arg_buffers), arg_ptrs)
 get_width_wrapper = renderlib.get_width
 get_height_wrapper = renderlib.get_height
 get_bpp_wrapper = renderlib.get_bpp
