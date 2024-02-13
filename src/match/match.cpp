@@ -1072,12 +1072,11 @@ int main(int argc, char** argv)
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 
-    //rend.cam.perspective(45.0f * constants::degrees_to_radians<float>(), aspect, 0.001f, 1000.0f);
-    std::cout << "rend fov: " << constants::radians_to_degrees<float>() * rend.fovy << "\n";
     rend.cam.perspective(rend.fovy, aspect, 0.001f, 100000.0f);
-    std::cout << "cam  fov: " << constants::radians_to_degrees<float>() * rend.cam.fovy() << "\n";
     rend.cam.view_all( rend.bbox );
-    std::cout << "cam  fov: " << constants::radians_to_degrees<float>() * rend.cam.fovy() << "\n";
+//    std::cout << "\tcam.eye() = " << std::fixed << std::setprecision(2) << rend.cam.eye() << "\n"
+//              << "\tcam.up()  = " << std::fixed << std::setprecision(2) << rend.cam.up() << "\n"
+//              << "\tcam dir   = " << std::fixed << std::setprecision(2) << normalize(rend.cam.eye() - rend.cam.center()) << "\n";
 
     rend.add_manipulator( std::make_shared<arcball_manipulator>(rend.cam, mouse::Left) );
     rend.add_manipulator( std::make_shared<pan_manipulator>(rend.cam, mouse::Middle) );
@@ -1107,7 +1106,7 @@ extern "C"
 
             float aspect = rend->width() / static_cast<float>(rend->height());
 
-            rend->cam.perspective(rend.fovy, aspect, 0.001f, 1000.0f);
+            rend->cam.perspective(rend->fovy, aspect, 0.001f, 1000.0f);
             rend->cam.view_all( rend->bbox );
 
             rend->add_manipulator( std::make_shared<arcball_manipulator>(rend->cam, mouse::Left) );
