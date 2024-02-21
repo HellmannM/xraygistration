@@ -51,7 +51,33 @@ renderer_width = c.c_int(get_width_wrapper(renderer))
 renderer_height = c.c_int(get_height_wrapper(renderer))
 renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
-def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False):
+def spherical_to_cartesian(spherical):
+    r     = spherical[0]
+    theta = spherical[1]
+    phi   = spherical[2]
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+    return [x, y, z]
+
+# returns:
+# r > 0
+# theta [0, pi]
+# phi [0, 2pi]
+def cartesian_to_spherical(cartesian):
+    x = cartesian[0]
+    y = cartesian[1]
+    z = cartesian[2]
+    r = np.sqrt(x*x + y*y + z*z)
+    if r < 1e-5:
+        return [0, 0, 0]
+    theta = np.arccos(z/r)
+    phi = np.arctan2(y, x)
+    if phi < 0: # return [0, 2pi] instead of [-pi, pi]
+        phi = phi + 2 * np.pi
+    return [r, theta, phi]
+
+def get_frame(camera, integration_coefficient=0.0000034, random_vignette=True, random_integration_coefficient=True):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -78,6 +104,9 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
     return image_buff[:, :, 0:3]
 
 ## Generators ----------------------------------------------------------
+eye_dist_max = 2000
+center_dist_max = 100
+
 class DataGenerator(tf.keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, dim=(32,32), batch_size=128, batches_per_epoch=128, n_channels=3):
@@ -106,34 +135,48 @@ class DataGenerator(tf.keras.utils.Sequence):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
         X = np.empty((self.batch_size, *self.dim, self.n_channels), dtype=np.uint8)
-        y = np.empty((self.batch_size, 9), dtype=np.float32)
+        y = np.empty((self.batch_size, 8), dtype=np.float32)
 
         # Generate data
         for i in range(self.batch_size):
             #TODO get volume dims.
             volume_radius = 500
             volume_center = [0, 0, 0]
-            eye_search_radius_inner = volume_radius * 1.2
-            eye_search_radius_outer = 1000
+            eye_search_radius_inner = 1400
+            eye_search_radius_outer = 1800
             center_search_radius = 100
 
             eye    = volume_center + self.sample_on_unit_sphere() * np.random.uniform(eye_search_radius_inner, eye_search_radius_outer)
             center = volume_center + self.sample_on_unit_sphere() * np.random.uniform(0, center_search_radius)
             up     = self.sample_on_unit_sphere()
 
-            # dir and up need to be orthogonal
-            # TODO chances that up and dir are colinear?...
-            cam_dir = [center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]]
+            #TODO chances that up and dir are colinear?...
+            cam_dir = np.subtract(center, eye)
             orthogonal = np.cross(cam_dir, up)
             up = np.cross(cam_dir, orthogonal)
             up /= np.linalg.norm(up)
 
-            # mapping ranges to [0,1]: eye, center: -10.000,10.000; up: -1,1
-            true_input = np.concatenate((eye, center, up))
-            scaled_input = np.concatenate((eye / 20000 + 0.5, center / 20000 + 0.5, up / 2 + 0.5))
+            # use spherical coords.
+            eye_spherical = cartesian_to_spherical(eye)
+            center_spherical = cartesian_to_spherical(center)
+            up_spherical_trunc = cartesian_to_spherical(up)[1:3]
+            # scale to [0,1]
+            #TODO use sin(phi), cos(phi) instead of phi to avoid half open interval
+            eye_spherical[1] /= np.pi
+            eye_spherical[2] /= 2 * np.pi
+            center_spherical[1] /= np.pi
+            center_spherical[2] /= 2 * np.pi
+            up_spherical_trunc[0] /= np.pi
+            up_spherical_trunc[1] /= 2 * np.pi
+            # remap r from [0, dist_max] to [0, 1]
+            eye_spherical[0] /= eye_dist_max
+            center_spherical[0] /= center_dist_max
 
-            y[i] = scaled_input
-            X[i,] = get_frame(true_input, random_vignette=True, random_integration_coefficient=True)
+            true_input = np.concatenate((eye, center, up))
+            spherical_input = np.concatenate((eye_spherical, center_spherical, up_spherical_trunc))
+
+            y[i] = spherical_input
+            X[i,] = get_frame(true_input, random_vignette=False, random_integration_coefficient=False)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
@@ -154,10 +197,7 @@ params = {'dim': (dim_x, dim_y),
 
 # Setup model
 model = tf.keras.models.Sequential()
-weight_eye    = 0.4 # mapping [0,1] to [-10000,10000]
-weight_center = 0.4 # mapping [0,1] to [-10000,10000]
-weight_up     = 0.2 # mapping [0,1] to [-1,1]
-loss_weights = [weight_eye/3, weight_eye/3, weight_eye/3, weight_center/3, weight_center/3, weight_center/3, weight_up/3, weight_up/3, weight_up/3]
+loss_weights = None
 if os.path.isfile('trained_model.keras'):
     print('loading trained model...')
     model = tf.keras.models.load_model('trained_model.keras')
@@ -175,11 +215,11 @@ else:
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(64, activation='relu'))
-    model.add(tf.keras.layers.Dense(9, activation='sigmoid'))
-    #model.add(tf.keras.layers.Dense(9, activation='linear'))
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
+    model.add(tf.keras.layers.Dense(8, activation='sigmoid'))
+    #optimizer = tf.keras.optimizers.SGD(learning_rate=0.01)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
-    #model.summary()
 
 # Generators
 training_generator   = DataGenerator(batches_per_epoch=32, **params)
@@ -195,7 +235,10 @@ def plot_step(fit_history, epochs, index):
     #plotter_lib.show()
 
 def run_step(model, training_generator, validation_generator, step, epochs, learning_rate):
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
+    #model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
+    #optimizer = tf.keras.optimizers.SGD(learning_rate=learning_rate)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.summary()
     print("Learning rate: ", model.optimizer.learning_rate.numpy())
     fit_history = model.fit(x=training_generator, validation_data=validation_generator, epochs=epochs, shuffle=False, use_multiprocessing=False, workers=1)
@@ -218,22 +261,22 @@ model.get_layer(name='resnet50v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 3
-epochs = 50
+epochs = 20
 learning_rate=1e-4
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 4
-epochs = 50
+epochs = 20
 learning_rate=1e-5
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
 print("predict...")
-eye = [1000, 0, 0]
+eye = [1670, 0, 0]
 center = [0, 0, 0]
 up = [0, 1, 0]
-test_cam = [eye[0], eye[1], eye[2], center[0], center[1], center[2], up[0], up[1], up[2]]
+test_cam = np.concatenate((eye, center, up))
 test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
 #import cv2 as cv
 #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
@@ -242,8 +285,23 @@ test_image = get_frame(test_cam, random_vignette=True, random_integration_coeffi
 preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
-#print("Pred: eye=", test_prediction[0, 0:3].numpy(), " center=", test_prediction[0, 3:6].numpy(), " up=", test_prediction[0, 6:9].numpy(), "\n")
-print("Pred: eye=", (test_prediction[0, 0:3].numpy() -0.5)*20000, " center=", (test_prediction[0, 3:6].numpy() -0.5)*20000, " up=", (test_prediction[0, 6:9].numpy() -0.5)*2, "\n")
+predicted_eye      = test_prediction[0, 0:3].numpy()
+predicted_center   = test_prediction[0, 3:6].numpy()
+predicted_up_trunc = test_prediction[0, 6:8].numpy()
+predicted_eye[0] *= eye_dist_max
+predicted_eye[1] *= np.pi
+predicted_eye[2] *= 2 * np.pi
+predicted_eye = spherical_to_cartesian(predicted_eye)
+predicted_center[0] *= center_dist_max
+predicted_center[1] *= np.pi
+predicted_center[2] *= 2 * np.pi
+predicted_center = spherical_to_cartesian(predicted_center)
+predicted_up = np.empty(3)
+predicted_up[0] = 1
+predicted_up[1] = predicted_up_trunc[0] * np.pi
+predicted_up[2] = predicted_up_trunc[1] * 2 * np.pi
+predicted_up = spherical_to_cartesian(predicted_up)
+print("Pred: eye=", predicted_eye, " center=", predicted_center, " up=", predicted_up)
 
 ## Save Model ----------------------------------------------------------
 #model.save("trained_model.keras")
