@@ -77,7 +77,57 @@ def cartesian_to_spherical(cartesian):
         phi = phi + 2 * np.pi
     return [r, theta, phi]
 
-def get_frame(camera, integration_coefficient=0.0000034, random_vignette=True, random_integration_coefficient=True):
+def angle_to_sincos(angle):
+    return [np.sin(angle), np.cos(angle)]
+
+def sincos_to_angle(sincos):
+    if sincos[0] >= 0:
+        return np.arccos(sincos[1])
+    return 2 * np.pi - np.arccos(sincos[1])
+
+def map_camera(camera, eye_dist_max, center_dist_max):
+    # transform to spherical coords
+    eye    = cartesian_to_spherical(camera[0:3])
+    center = cartesian_to_spherical(camera[3:6])
+    up     = cartesian_to_spherical(camera[6:9])
+    # scale to [0, 1]
+    # Note: mapping phi to [sin(phi), cos(phi)] to avoid half open interval.
+    eye_mapped    = np.empty(4)
+    center_mapped = np.empty(4)
+    up_mapped     = np.empty(3) # up is normalized: don't need r
+    eye_mapped[0] = eye[0] / eye_dist_max
+    eye_mapped[1] = eye[1] / np.pi
+    eye_mapped[2:4] = np.divide(np.add(angle_to_sincos(eye[2]), 1), 2)
+    center_mapped[0] = center[0] / center_dist_max
+    center_mapped[1] = center[1] / np.pi
+    center_mapped[2:4] = np.divide(np.add(angle_to_sincos(center[2]), 1), 2)
+    up_mapped[0] = up[1] / np.pi
+    up_mapped[1:3] = np.divide(np.add(angle_to_sincos(up[2]), 1), 2)
+    return np.concatenate((eye_mapped, center_mapped, up_mapped))
+
+def restore_camera(camera, eye_dist_max, center_dist_max):
+    eye_mapped    = camera[0:4]
+    center_mapped = camera[4:8]
+    up_mapped     = camera[8:11]
+    # unscale
+    eye_mapped[0] *= eye_dist_max
+    eye_mapped[1] *= np.pi
+    eye_mapped[2:4] = np.subtract(np.multiply(eye_mapped[2:4], 2), 1)
+    center_mapped[0] *= center_dist_max
+    center_mapped[1] *= np.pi
+    center_mapped[2:4] = np.subtract(np.multiply(center_mapped[2:4], 2), 1)
+    up_mapped[0] *= np.pi
+    up_mapped[1:3] = np.subtract(np.multiply(up_mapped[1:3], 2), 1)
+    eye    = [   eye_mapped[0],    eye_mapped[1], sincos_to_angle(   eye_mapped[2:4])]
+    center = [center_mapped[0], center_mapped[1], sincos_to_angle(center_mapped[2:4])]
+    up     = [               1,     up_mapped[0], sincos_to_angle(    up_mapped[1:3])]
+    # spherical to cartesian
+    eye_c    = spherical_to_cartesian(eye)
+    center_c = spherical_to_cartesian(center)
+    up_c     = spherical_to_cartesian(up)
+    return np.concatenate((eye_c, center_c, up_c))
+
+def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -135,7 +185,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
         X = np.empty((self.batch_size, *self.dim, self.n_channels), dtype=np.uint8)
-        y = np.empty((self.batch_size, 8), dtype=np.float32)
+        y = np.empty((self.batch_size, 11), dtype=np.float32)
 
         # Generate data
         for i in range(self.batch_size):
@@ -156,27 +206,11 @@ class DataGenerator(tf.keras.utils.Sequence):
             up = np.cross(cam_dir, orthogonal)
             up /= np.linalg.norm(up)
 
-            # use spherical coords.
-            eye_spherical = cartesian_to_spherical(eye)
-            center_spherical = cartesian_to_spherical(center)
-            up_spherical_trunc = cartesian_to_spherical(up)[1:3]
-            # scale to [0,1]
-            #TODO use sin(phi), cos(phi) instead of phi to avoid half open interval
-            eye_spherical[1] /= np.pi
-            eye_spherical[2] /= 2 * np.pi
-            center_spherical[1] /= np.pi
-            center_spherical[2] /= 2 * np.pi
-            up_spherical_trunc[0] /= np.pi
-            up_spherical_trunc[1] /= 2 * np.pi
-            # remap r from [0, dist_max] to [0, 1]
-            eye_spherical[0] /= eye_dist_max
-            center_spherical[0] /= center_dist_max
+            true_camera   = np.concatenate((eye, center, up))
+            mapped_camera = map_camera(true_camera, eye_dist_max, center_dist_max)
 
-            true_input = np.concatenate((eye, center, up))
-            spherical_input = np.concatenate((eye_spherical, center_spherical, up_spherical_trunc))
-
-            y[i] = spherical_input
-            X[i,] = get_frame(true_input, random_vignette=False, random_integration_coefficient=False)
+            y[i] = mapped_camera
+            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=False)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
@@ -215,7 +249,7 @@ else:
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
     model.add(tf.keras.layers.Dense(64, activation='relu'))
-    model.add(tf.keras.layers.Dense(8, activation='sigmoid'))
+    model.add(tf.keras.layers.Dense(11, activation='sigmoid'))
     #optimizer = tf.keras.optimizers.SGD(learning_rate=0.01)
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
@@ -277,7 +311,8 @@ eye = [1670, 0, 0]
 center = [0, 0, 0]
 up = [0, 1, 0]
 test_cam = np.concatenate((eye, center, up))
-test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
+mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
+test_image = get_frame(test_cam, random_vignette=False, random_integration_coefficient=False)
 #import cv2 as cv
 #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
 #cv.imshow("Display Image", test_image);
@@ -285,23 +320,8 @@ test_image = get_frame(test_cam, random_vignette=True, random_integration_coeffi
 preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
-predicted_eye      = test_prediction[0, 0:3].numpy()
-predicted_center   = test_prediction[0, 3:6].numpy()
-predicted_up_trunc = test_prediction[0, 6:8].numpy()
-predicted_eye[0] *= eye_dist_max
-predicted_eye[1] *= np.pi
-predicted_eye[2] *= 2 * np.pi
-predicted_eye = spherical_to_cartesian(predicted_eye)
-predicted_center[0] *= center_dist_max
-predicted_center[1] *= np.pi
-predicted_center[2] *= 2 * np.pi
-predicted_center = spherical_to_cartesian(predicted_center)
-predicted_up = np.empty(3)
-predicted_up[0] = 1
-predicted_up[1] = predicted_up_trunc[0] * np.pi
-predicted_up[2] = predicted_up_trunc[1] * 2 * np.pi
-predicted_up = spherical_to_cartesian(predicted_up)
-print("Pred: eye=", predicted_eye, " center=", predicted_center, " up=", predicted_up)
+predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
+print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
 
 ## Save Model ----------------------------------------------------------
 #model.save("trained_model.keras")
