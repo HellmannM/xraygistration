@@ -38,6 +38,7 @@ bpp = c.c_int(get_bpp_wrapper(renderer))
 image_buff = np.zeros(shape=(height.value, width.value, bpp.value), dtype=np.uint8)
 image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
 
+integration_coefficient=(c.c_float)(0.0000034)
 eye_x = (c.c_float)(1000)
 eye_y = (c.c_float)(0)
 eye_z = (c.c_float)(0)
@@ -51,6 +52,7 @@ print('python: Call single_shot()')
 renderlib.single_shot(
         renderer,
         image_buff_ptr,
+        integration_coefficient,
         eye_x,
         eye_y,
         eye_z,
