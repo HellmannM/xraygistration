@@ -153,6 +153,9 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
         image_buff = vignetted
     return image_buff[:, :, 0:3]
 
+def init_gl():
+    renderlib.init_gl()
+
 ## Generators ----------------------------------------------------------
 eye_dist_max = 2000
 center_dist_max = 100
@@ -186,6 +189,9 @@ class DataGenerator(tf.keras.utils.Sequence):
         # Initialization
         X = np.empty((self.batch_size, *self.dim, self.n_channels), dtype=np.uint8)
         y = np.empty((self.batch_size, 11), dtype=np.float32)
+
+        #TODO seems to be running in new thread: need to re-init gl(ew).
+        init_gl()
 
         # Generate data
         for i in range(self.batch_size):

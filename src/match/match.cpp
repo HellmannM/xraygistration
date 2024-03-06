@@ -1132,6 +1132,8 @@ extern "C"
 
     int get_bpp(void* rend_ptr) { return 4; }
 
+    void init_gl() { glewInit(); }
+
     void single_shot(
             void* rend_ptr, void* img_buff, float int_coeff,
             float eye_x, float eye_y, float eye_z,
