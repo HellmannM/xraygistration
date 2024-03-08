@@ -216,7 +216,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             mapped_camera = map_camera(true_camera, eye_dist_max, center_dist_max)
 
             y[i] = mapped_camera
-            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=False)
+            X[i,] = get_frame(true_camera, random_vignette=True, random_integration_coefficient=True)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
@@ -254,8 +254,9 @@ else:
     model.add(resnet)
     model.add(tf.keras.layers.AveragePooling2D((3,3)))
     model.add(tf.keras.layers.Flatten())
-    model.add(tf.keras.layers.Dense(64, activation='relu'))
+    #model.add(tf.keras.layers.Dense(64, activation='relu'))
     model.add(tf.keras.layers.Dense(11, activation='sigmoid'))
+    #model.add(tf.keras.layers.Dense(11, activation='tanh'))
     #optimizer = tf.keras.optimizers.SGD(learning_rate=0.01)
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
@@ -265,13 +266,13 @@ else:
 training_generator   = DataGenerator(batches_per_epoch=32, **params)
 validation_generator = DataGenerator(batches_per_epoch=4, **params)
 
-def plot_step(fit_history, epochs, index):
+def plot_step(fit_history, epochs, learning_rate, index):
     fig, ax = plotter_lib.subplots()
     ax.plot(range(epochs), fit_history.history['mean_squared_error'], label='Training MSE')
     ax.plot(range(epochs), fit_history.history['val_mean_squared_error'], label='Validation MSE')
-    ax.set(xlabel='Epochs', ylabel='Accuracy', title='Model Accuracy')
+    ax.set(xlabel='Epochs', ylabel='MSE', title='Step ' + str(index) + ', learning rate = ' + str(learning_rate))
     ax.legend()
-    fig.savefig('accuracy' + str(index) + '.png')
+    fig.savefig('mse' + str(index) + '.png')
     #plotter_lib.show()
 
 def run_step(model, training_generator, validation_generator, step, epochs, learning_rate):
@@ -282,12 +283,12 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
     model.summary()
     print("Learning rate: ", model.optimizer.learning_rate.numpy())
     fit_history = model.fit(x=training_generator, validation_data=validation_generator, epochs=epochs, shuffle=False, use_multiprocessing=False, workers=1)
-    plot_step(fit_history, epochs, step)
+    plot_step(fit_history=fit_history, epochs=epochs, learning_rate=learning_rate, index=step)
     
 
 ## Training ------------------------------------------------------------
 step = 1
-epochs = 20
+epochs = 30
 learning_rate=1e-3
 print("freeze resnet layers...")
 model.get_layer(name='resnet50v2').trainable=False
@@ -301,14 +302,14 @@ model.get_layer(name='resnet50v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 3
-epochs = 20
+epochs = 50
 learning_rate=1e-4
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
-step = 4
-epochs = 20
-learning_rate=1e-5
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+#step = 4
+#epochs = 20
+#learning_rate=1e-5
+#run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
@@ -318,7 +319,7 @@ center = [0, 0, 0]
 up = [0, 1, 0]
 test_cam = np.concatenate((eye, center, up))
 mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
-test_image = get_frame(test_cam, random_vignette=False, random_integration_coefficient=False)
+test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
 #import cv2 as cv
 #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
 #cv.imshow("Display Image", test_image);
