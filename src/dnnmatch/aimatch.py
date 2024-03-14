@@ -222,7 +222,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             #cv.imshow("Display Image", X[i,]);
             #cv.waitKey(0);
         
-        X = tf.keras.applications.resnet_v2.preprocess_input(X, data_format='channels_last')
+        X = tf.keras.applications.inception_resnet_v2.preprocess_input(X, data_format='channels_last')
 
         return X, y
 
@@ -244,7 +244,7 @@ if os.path.isfile('trained_model.keras'):
 else:
     print('creating new model...')
     model.add(tf.keras.layers.Resizing(height=224, width=224, interpolation='bilinear', crop_to_aspect_ratio=True))
-    resnet = tf.keras.applications.ResNet50V2(include_top=False,
+    resnet = tf.keras.applications.InceptionResNetV2(include_top=False,
                        #input_shape=(dim_x, dim_y, 3),
                        input_shape=(224, 224, 3),
                        pooling='None',
@@ -288,28 +288,28 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
 
 ## Training ------------------------------------------------------------
 step = 1
-epochs = 30
+epochs = 60
 learning_rate=1e-3
 print("freeze resnet layers...")
-model.get_layer(name='resnet50v2').trainable=False
+model.get_layer(name='inception_resnet_v2').trainable=False
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 2
-epochs = 50
+epochs = 150
 learning_rate=1e-3
 print("train resnet layers...")
-model.get_layer(name='resnet50v2').trainable=True
+model.get_layer(name='inception_resnet_v2').trainable=True
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 step = 3
-epochs = 50
+epochs = 150
 learning_rate=1e-4
 run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
-#step = 4
-#epochs = 20
-#learning_rate=1e-5
-#run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+step = 4
+epochs = 150
+learning_rate=1e-5
+run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
@@ -324,7 +324,7 @@ test_image = get_frame(test_cam, random_vignette=True, random_integration_coeffi
 #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
 #cv.imshow("Display Image", test_image);
 #cv.waitKey(0);
-preprocessed_test_image = tf.keras.applications.resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
+preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
 test_prediction=model(preprocessed_test_image, training=False)
 print("Test: eye=", eye, " center=", center, " up=", up)
 predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
