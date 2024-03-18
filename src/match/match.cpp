@@ -54,6 +54,7 @@
 #include "host_device_rt.h"
 #include "match_result.h"
 #include "orb_matcher.h"
+#include "surf_sift_matcher.h"
 #include "render.h"
 #include "timer.h"
 
@@ -172,7 +173,8 @@ struct renderer : viewer_type
     vec3                        bgcolor;
     vec2f                       value_range;
     // matcher
-    orb_matcher                 matcher;
+    //orb_matcher                 matcher;
+    surf_sift_matcher           matcher;
     // pixel select
     int                         selected_point;
     vec2                        selected_pixels[4];

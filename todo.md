@@ -1,6 +1,7 @@
 # Match
 ### Matcher:
 - [ ] Use SURF Detector + SIFT Descriptor instead of ORB.
+- [ ] License for SURF/SIFT
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
