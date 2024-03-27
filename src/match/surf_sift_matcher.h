@@ -97,11 +97,12 @@ struct surf_sift_matcher
         result.reference_keypoints = reference_keypoints;
         result.query_keypoints = current_keypoints;
     
-    //    cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
-    //    cv::Mat img;
-    //    cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
-    //    cv::imshow("Display Image", img);
-    //    cv::waitKey(0);
+        //cv::namedWindow("Display Image", cv::WINDOW_AUTOSIZE);
+        //cv::Mat img;
+        ////cv::drawMatches(current_image, current_keypoints, reference_image, reference_keypoints, result.matches, img);
+        //cv::drawMatches(current_image, current_keypoints, current_image, reference_keypoints, result.matches, img);
+        //cv::imshow("Display Image", img);
+        //cv::waitKey(0);
         return result;
     }
 };
