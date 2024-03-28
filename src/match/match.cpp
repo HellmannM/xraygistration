@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <ostream>
+#include <ranges>
 #include <vector>
 
 #include <GL/glew.h>
@@ -276,14 +277,11 @@ void renderer::search()
     size_t num_previous_good_matches = 0;
     pinhole_camera previous_cam = cam;
 
-    for (size_t i=0; i<10; ++i)
+    while (num_current_good_matches > num_previous_good_matches)
     {
-        while (num_current_good_matches > num_previous_good_matches)
-        {
-            previous_cam = cam;
-            num_previous_good_matches = num_current_good_matches;
-            num_current_good_matches = search_3d2d();
-        }
+        previous_cam = cam;
+        num_previous_good_matches = num_current_good_matches;
+        num_current_good_matches = search_3d2d();
     }
     cam = previous_cam;
 
@@ -365,24 +363,31 @@ void renderer::search_2d2d()
 size_t renderer::search_3d2d()
 {
     auto match_result = match();
-    auto good_matches = match_result.good_matches();
+    auto good_matches = match_result.good_matches(50.f);
     std::cout << good_matches.size() << " good matches\n";
-    constexpr size_t min_good_matches {10};
+    constexpr size_t min_good_matches {6};
     if (good_matches.size() < min_good_matches)
     {
-        std::cerr << "ERROR: found less than " << min_good_matches << " good matches. Aborting search...\n";
+        std::cerr << "ERROR: found only " << good_matches.size()
+                  << " good matches (minimum is " << min_good_matches
+                  << "). Aborting search...\n";
         return good_matches.size();
     }
-    std::sort(good_matches.begin(), good_matches.end(), [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
-    //std::cout << "Searching with " << good_matches.size() << " good matches.\n";
+    std::sort(good_matches.begin(), good_matches.end(),
+              [](const cv::DMatch& lhs, const cv::DMatch& rhs){return lhs.distance < rhs.distance;});
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
-    for (const auto& m : good_matches)
-    //for (auto e = good_matches.begin(); e != good_matches.begin() + min_good_matches; ++e)
+    constexpr size_t num_points_for_solvepnp {min_good_matches};
+//    TODO why is ranges::views::take(n) not working?
+//    for (const auto& m : good_matches | std::ranges::views::take(num_points_for_solvepnp))
+//    {
+//        reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
+//        query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
+//    }
+    for (size_t i=0; i<std::min(num_points_for_solvepnp, good_matches.size()); ++i)
     {
-        //const auto& m = *e;
-        reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
-        query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
+        reference_points.push_back(match_result.reference_keypoints[good_matches[i].trainIdx].pt);
+        query_points.push_back(match_result.query_keypoints[good_matches[i].queryIdx].pt);
     }
 
     // distance estimation: assume (tnear+tfar)/2 for now
