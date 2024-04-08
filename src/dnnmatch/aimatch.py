@@ -1,5 +1,6 @@
 # aimatch.py
 
+import argparse
 import ctypes as c
 import matplotlib.pyplot as plotter_lib
 import numpy as np
@@ -25,47 +26,63 @@ import tensorflow as tf
 #        print(e)
 
 
+## Parse cmdline args -------------------------------------------------
+parser = argparse.ArgumentParser(description='Train DNN on volume and/or predict X-ray cam args.')
+parser.add_argument('--load', type=str, help='Load pre-trained DNN model (path to file).')
+parser.add_argument('--train', type=str, help='Train DNN model on nii volume (path to file).')
+parser.add_argument('--store', type=str, help='Export trained DNN model file (path to file).')
+parser.add_argument('--predict', type=str, nargs='?', help='Predict cam args for dcm files (paths to files)')
+parser.add_argument('--export_predictions', type=str, help='Export predicted coords as json (path to file).')
+parser.add_argument('--calibrate', type=str, help='Read sensor data for calibration from dicom file (path to file).')
+args = parser.parse_args()
+
 ## CT invariables -----------------------------------------------------
-# Read dicom data from existing ct image
-import dicomreader as dr
-dicom_path = "../testfiles/Bohr_Bruno_dicom/Abdomen - R202108130920122/Abdomen_Einzelaufnahme_1/IM-0001-0001.dcm"
-#TODO dicom and nii files as args
-#if len(sys.argv) > 1:
-#    dicom_path = sys.argv[1]
-print("Reading file: ", dicom_path)
-dd = dr.read_dicom(dicom_path)
-print(dd)
+# default values
+dd_fov_x_rad = b'0.31535198085001725'
+dd_fov_y_rad = b'0.24426769480863722'
+if args.calibrate is not None:
+    if not os.path.isfile(args.calibrate):
+        print("ERROR: could not find calibration file: ", args.calibrate)
+        exit(1)
+    # Read dicom data from existing ct image
+    import dicomreader as dr
+    print("Reading file: ", args.calibrate)
+    dd = dr.read_dicom(args.calibrate)
+    dd_fov_x_rad = str(dd.fov_x_rad).encode("UTF-8")
+    dd_fov_y_rad = str(dd.fov_y_rad).encode("UTF-8")
+    print(dd)
 
 
 ## Renderer setup -----------------------------------------------------
-# Load C++ rendering libs
-stdc      = c.cdll.LoadLibrary("libc.so.6")
-stdcpp    = c.cdll.LoadLibrary("libc++.so.1")
-renderlib = c.cdll.LoadLibrary("./src/match/librender.so")
-# Create and init renderer instance
-create_renderer_wrapper = renderlib.create_renderer
-create_renderer_wrapper.restype = c.c_void_p
-renderer = c.c_void_p(create_renderer_wrapper())
-arg_buffers = [c.create_string_buffer(b"./src/match/match"),
-               c.create_string_buffer(b"../testfiles/Dummy_Paul_nifti/2__head_10_stx_head.nii"),
-               c.create_string_buffer(b"-device"),
-               c.create_string_buffer(b"gpu"),
-               c.create_string_buffer(b"-fovx"),
-               c.create_string_buffer(str(dd.fov_x_rad).encode("UTF-8")),
-               c.create_string_buffer(b"-fovy"),
-               c.create_string_buffer(str(dd.fov_y_rad).encode("UTF-8"))
-              ]
-arg_ptrs    = (c.c_char_p * len(arg_buffers))(*map(c.addressof, arg_buffers))
-renderlib.init_renderer(renderer, len(arg_buffers), arg_ptrs)
-get_width_wrapper = renderlib.get_width
-get_height_wrapper = renderlib.get_height
-get_bpp_wrapper = renderlib.get_bpp
-get_width_wrapper.restype = c.c_int
-get_height_wrapper.restype = c.c_int
-get_bpp_wrapper.restype = c.c_int
-renderer_width = c.c_int(get_width_wrapper(renderer))
-renderer_height = c.c_int(get_height_wrapper(renderer))
-renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
+if args.train is not None:
+    # Load C++ rendering libs
+    stdc      = c.cdll.LoadLibrary("libc.so.6")
+    stdcpp    = c.cdll.LoadLibrary("libc++.so.1")
+    renderlib = c.cdll.LoadLibrary("./src/match/librender.so")
+    # Create and init renderer instance
+    create_renderer_wrapper = renderlib.create_renderer
+    create_renderer_wrapper.restype = c.c_void_p
+    renderer = c.c_void_p(create_renderer_wrapper())
+    arg_buffers = [c.create_string_buffer(b"./src/match/match"),
+                   c.create_string_buffer(args.train.encode("UTF-8")),
+                   c.create_string_buffer(b"-device"),
+                   c.create_string_buffer(b"gpu"),
+                   c.create_string_buffer(b"-fovx"),
+                   c.create_string_buffer(dd_fov_x_rad),
+                   c.create_string_buffer(b"-fovy"),
+                   c.create_string_buffer(dd_fov_y_rad)
+                  ]
+    arg_ptrs    = (c.c_char_p * len(arg_buffers))(*map(c.addressof, arg_buffers))
+    renderlib.init_renderer(renderer, len(arg_buffers), arg_ptrs)
+    get_width_wrapper = renderlib.get_width
+    get_height_wrapper = renderlib.get_height
+    get_bpp_wrapper = renderlib.get_bpp
+    get_width_wrapper.restype = c.c_int
+    get_height_wrapper.restype = c.c_int
+    get_bpp_wrapper.restype = c.c_int
+    renderer_width = c.c_int(get_width_wrapper(renderer))
+    renderer_height = c.c_int(get_height_wrapper(renderer))
+    renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
 
 def spherical_to_cartesian(spherical):
     r     = spherical[0]
@@ -254,11 +271,14 @@ params = {'dim': (dim_x, dim_y),
 # Setup model
 model = tf.keras.models.Sequential()
 loss_weights = None
-if os.path.isfile('trained_model.keras'):
+if args.load is not None:
+    if not os.path.isfile(args.load):
+        print("ERROR: could not find pre-trained model file: ", args.load)
+        exit(1)
     print('loading trained model...')
     model = tf.keras.models.load_model('trained_model.keras')
 else:
-    print('creating new model...')
+    print('No pre-trained model specified. Creating new model...')
     model.add(tf.keras.layers.Resizing(height=224, width=224, interpolation='bilinear', crop_to_aspect_ratio=True))
     resnet = tf.keras.applications.InceptionResNetV2(include_top=False,
                        #input_shape=(dim_x, dim_y, 3),
@@ -303,50 +323,62 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
     
 
 ## Training ------------------------------------------------------------
-step = 1
-epochs = 60
-learning_rate=1e-3
-print("freeze resnet layers...")
-model.get_layer(name='inception_resnet_v2').trainable=False
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
-
-step = 2
-epochs = 150
-learning_rate=1e-3
-print("train resnet layers...")
-model.get_layer(name='inception_resnet_v2').trainable=True
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
-
-step = 3
-epochs = 150
-learning_rate=1e-4
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
-
-step = 4
-epochs = 150
-learning_rate=1e-5
-run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+if args.train is not None:
+    step = 1
+    epochs = 60
+    learning_rate=1e-3
+    print("freeze resnet layers...")
+    model.get_layer(name='inception_resnet_v2').trainable=False
+    run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+    
+    step = 2
+    epochs = 150
+    learning_rate=1e-3
+    print("train resnet layers...")
+    model.get_layer(name='inception_resnet_v2').trainable=True
+    run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+    
+    step = 3
+    epochs = 150
+    learning_rate=1e-4
+    run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
+    
+    step = 4
+    epochs = 150
+    learning_rate=1e-5
+    run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
 
 ## Prediction ----------------------------------------------------------
-print("predict...")
-eye = [1670, 0, 0]
-center = [0, 0, 0]
-up = [0, 1, 0]
-test_cam = np.concatenate((eye, center, up))
-mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
-test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
-#import cv2 as cv
-#cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
-#cv.imshow("Display Image", test_image);
-#cv.waitKey(0);
-preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
-test_prediction=model(preprocessed_test_image, training=False)
-print("Test: eye=", eye, " center=", center, " up=", up)
-predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
-print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
+if args.predict is not None:
+    #TODO loop over prediction files
+    print("predict...")
+    eye = [1670, 0, 0]
+    center = [0, 0, 0]
+    up = [0, 1, 0]
+    test_cam = np.concatenate((eye, center, up))
+    mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
+    test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
+    #import cv2 as cv
+    #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
+    #cv.imshow("Display Image", test_image);
+    #cv.waitKey(0);
+    preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
+    test_prediction=model(preprocessed_test_image, training=False)
+    print("Test: eye=", eye, " center=", center, " up=", up)
+    predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
+    print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
+
+    # export as json
+    #TODO
+    #if args.export_predictions is not None:
+        #TODO
 
 ## Save Model ----------------------------------------------------------
-#model.save("trained_model.keras")
+if args.store is not None:
+    print("Saving model as: ", args.store)
+    model.save(args.store)
 
-renderlib.destroy_renderer(renderer)
+## Cleanup -------------------------------------------------------------
+if args.train is not None:
+    renderlib.destroy_renderer(renderer)
