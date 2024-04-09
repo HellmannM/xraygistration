@@ -87,7 +87,8 @@ struct renderer : viewer_type
 #endif
         , volume_ref({std::array<unsigned int, 3>({2, 2, 2})})
         , volume_filename()
-        , reference_image_filename()
+        , json_filename()
+        , xray_filenames()
         , texture_format(virvo::PF_R16I)
         , delta(0.01f)
         , integration_coefficient(0.0000034f)
@@ -110,12 +111,20 @@ struct renderer : viewer_type
 
         add_cmdline_option( support::cl::makeOption<std::string&>(
             support::cl::Parser<>(),
-            "ref",
-            support::cl::Desc("Reference image file in nii format"),
-            //support::cl::Positional,
-            //support::cl::Optional,
+            "json",
+            support::cl::Desc("json file with xray filenames and predictions."),
+            support::cl::Optional,
             support::cl::ArgRequired,
-            support::cl::init(reference_image_filename)
+            support::cl::init(json_filename)
+            ) );
+
+        add_cmdline_option( support::cl::makeOption<std::vector<std::string>&>(
+            support::cl::Parser<>(),
+            "xrays",
+            support::cl::Desc("Comma-separated list of X-ray image file(s) in nii format."),
+            support::cl::CommaSeparated,
+            support::cl::ArgRequired,
+            support::cl::init(xray_filenames)
             ) );
 
         add_cmdline_option( support::cl::makeOption<float&>(
@@ -166,7 +175,8 @@ struct renderer : viewer_type
     cuda_volume_ref_t           device_volume_ref;
 #endif
     std::string                 volume_filename;
-    std::string                 reference_image_filename;
+    std::string                 json_filename;
+    std::vector<std::string>    xray_filenames;
     vvVolDesc*                  vd;
     virvo::PixelFormat          texture_format;
     float                       delta;
@@ -183,7 +193,7 @@ struct renderer : viewer_type
     ray_type_cpu                saved_rays[4];
 
     void load_volume();
-    void load_reference_image();
+    void load_xray(const size_t idx);
     void update_reference_image();
     void update_reference_image(const cv::Mat& image);
     match_result_t match();
@@ -1013,10 +1023,10 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
 #endif
 }
 
-void renderer::load_reference_image()
+void renderer::load_xray(const size_t idx)
 {
     int width, height;
-    if (matcher.load_reference_image(reference_image_filename, width, height))
+    if (!xray_filenames.empty() && matcher.load_reference_image(xray_filenames[idx], width, height))
     {
         on_resize(width, height);
     }
@@ -1077,7 +1087,7 @@ int main(int argc, char** argv)
 
 //    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
 //                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
-    rend.load_reference_image();
+    rend.load_xray(0);
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 
@@ -1111,7 +1121,7 @@ extern "C"
             renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
             rend->init(argc, argv);
             rend->load_volume();
-            rend->load_reference_image();
+            rend->load_xray(0);
 
             float aspect = rend->width() / static_cast<float>(rend->height());
 
