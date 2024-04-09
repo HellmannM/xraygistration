@@ -54,6 +54,7 @@ include_directories(${__VSNRAY_CONFIG_DIR})
 include_directories(${CMD_LINE_INCLUDE_DIR})
 include_directories(${DESKVOX_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${RAPID_JSON_INCLUDE_DIR})
 
 #--------------
 

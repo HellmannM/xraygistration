@@ -2,6 +2,7 @@
 
 import argparse
 import ctypes as c
+import json
 import matplotlib.pyplot as plotter_lib
 import numpy as np
 import os.path
@@ -351,28 +352,37 @@ if args.train is not None:
 
 ## Prediction ----------------------------------------------------------
 if args.predict is not None:
-    #TODO loop over prediction files
-    print("predict...")
-    eye = [1670, 0, 0]
-    center = [0, 0, 0]
-    up = [0, 1, 0]
-    test_cam = np.concatenate((eye, center, up))
-    mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
-    test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
-    #import cv2 as cv
-    #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
-    #cv.imshow("Display Image", test_image);
-    #cv.waitKey(0);
-    preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
-    test_prediction=model(preprocessed_test_image, training=False)
-    print("Test: eye=", eye, " center=", center, " up=", up)
-    predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
-    print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
+    predictions_dict = dict()
+    for image_file in args.predict:
+        #TODO load file...
+        print("predict...")
+        eye = [1670, 0, 0]
+        center = [0, 0, 0]
+        up = [0, 1, 0]
+        test_cam = np.concatenate((eye, center, up))
+        mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
+        test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
+        #import cv2 as cv
+        #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
+        #cv.imshow("Display Image", test_image);
+        #cv.waitKey(0);
 
-    # export as json
-    #TODO
-    #if args.export_predictions is not None:
-        #TODO
+        preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
+        test_prediction=model(preprocessed_test_image, training=False)
+        print("Test: eye=", eye, " center=", center, " up=", up)
+        predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
+        print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
+        predictions_dict[image_file] = {
+            "eye": eye,
+            "center": center,
+            "up": up
+        }
+        print("predictions_dict:\n", predictions_dict)
+
+    # export predictions as json
+    if args.export_predictions is not None:
+        with open(json_filename, 'w', encoding='utf-8') as json_file:
+          json.dump(data, json_file, ensure_ascii=False, indent=4)
 
 ## Save Model ----------------------------------------------------------
 if args.store is not None:
