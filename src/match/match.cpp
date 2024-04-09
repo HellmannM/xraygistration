@@ -874,12 +874,13 @@ void renderer::load_volume()
     std::cout << "Loading volume file: " << volume_filename << "\n";
     vd = new vvVolDesc(volume_filename.c_str());
     vvFileIO fio;
-    if (fio.loadVolumeData(vd) != vvFileIO::OK)
+    const auto err = fio.loadVolumeData(vd);
+    if (err != vvFileIO::OK)
     {
-        std::cerr << "Error loading volume" << std::endl;
+        std::cerr << "Error loading volume: " << err << std::endl;
         delete vd;
         vd = NULL;
-        return;
+        exit(1);
     }
     else vd->printInfoLine();
 //    virvo::TextureUtil tu(vd);
