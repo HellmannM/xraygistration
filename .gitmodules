@@ -2,7 +2,16 @@
 	path = 3rdparty/visionaray
     url = git@github.com:HellmannM/visionaray.git
     branch = match
+
 [submodule "deskvox"]
 	path = 3rdparty/deskvox
     url = git@github.com:HellmannM/deskvox.git
     branch = ct-rg-matcher
+
+[submodule "3rdparty/nlohmann_json"]
+	path = 3rdparty/nlohmann_json
+	url = git@github.com:nlohmann/json.git
+
+[submodule "3rdparty/CmdLine"]
+	path = 3rdparty/CmdLine
+	url = https://github.com/abolz/CmdLine.git

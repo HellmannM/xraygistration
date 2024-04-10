@@ -16,12 +16,14 @@ set(VISIONARAY_COMMON_DIR "${VISIONARAY_DIR}/src/common")
 set(VISIONARAY_SRC_DIR "${VISIONARAY_DIR}/src")
 set(VISIONARAY_BUILD_DIR "${VISIONARAY_DIR}/build")
 #set(__VSNRAY_LINK_LIBRARIES ${__VSNRAY_LINK_LIBRARIES} ${VISIONARAY_BUILD_DIR}/src/visionaray ${VISIONARAY_BUILD_DIR}/src/common)
-set(CMD_LINE_DIR "${VISIONARAY_DIR}/src/3rdparty/CmdLine")
+set(CMD_LINE_DIR "${3RDPARTY_DIR}/CmdLine")
 set(CMD_LINE_INCLUDE_DIR "${CMD_LINE_DIR}/include")
 set(IMGUI_DIR "${VISIONARAY_DIR}/src/3rdparty/imgui")
 set(DESKVOX_DIR "${3RDPARTY_DIR}/deskvox")
 set(DESKVOX_INCLUDE_DIR "${DESKVOX_DIR}/virvo")
 set(DESKVOX_BIN_DIR "${DESKVOX_DIR}/build/Release/bin")
+set(NLOHMANN_JSON_DIR "${3RDPARTY_DIR}/nlohmann_json")
+set(NLOHMANN_JSON_INCLUDE_DIR "${NLOHMANN_JSON_DIR}/include")
 
 #--------------------------------------------------------------------------------------------------
 # CMake modules

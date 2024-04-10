@@ -22,14 +22,12 @@ visionaray_use_package(Nifti)
 visionaray_use_package(OpenCV)
 
 # CUDA
-
 if (VSNRAY_ENABLE_CUDA)
     find_package(CUDA)
     visionaray_use_package(CUDA)
 endif()
 
 # TBB
-
 if (VSNRAY_ENABLE_TBB)
     find_package(TBB)
     visionaray_use_package(TBB)
@@ -54,7 +52,8 @@ include_directories(${__VSNRAY_CONFIG_DIR})
 include_directories(${CMD_LINE_INCLUDE_DIR})
 include_directories(${DESKVOX_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${RAPID_JSON_INCLUDE_DIR})
+include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
+
 
 #--------------
 

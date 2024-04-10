@@ -52,6 +52,9 @@
 #include <virvo/vvpixelformat.h>
 #include <virvo/vvtextureutil.h>
 
+// JSON includes
+#include <nlohmann/json.hpp>
+
 #include "host_device_rt.h"
 #include "match_result.h"
 #include "orb_matcher.h"
