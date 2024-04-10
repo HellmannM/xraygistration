@@ -3,7 +3,7 @@
 
 #include <common/config.h>
 
-#include <cstring> // memcpy
+#include <cstring>
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -197,6 +197,7 @@ struct renderer : viewer_type
 
     void load_volume();
     void load_xray(const size_t idx);
+    void load_json();
     void update_reference_image();
     void update_reference_image(const cv::Mat& image);
     match_result_t match();
@@ -1035,6 +1036,48 @@ void renderer::load_xray(const size_t idx)
     }
 }
 
+void renderer::load_json()
+{
+    std::ifstream json_file(json_filename);
+    if (json_file.fail())
+    {
+        std::cerr << "ERROR: Could not open json file: " << json_filename << "\n" << std::strerror(errno) << std::endl;
+        exit(1);
+    }
+    struct prediction
+    {
+        std::string filename;
+        vec3f eye;
+        vec3f center;
+        vec3f up;
+        prediction(std::string file,
+                    float eye_x, float eye_y, float eye_z,
+                    float center_x, float center_y, float center_z,
+                    float up_x, float up_y, float up_z)
+            : filename(file), eye(eye_x, eye_y, eye_z), center(center_x, center_y, center_z), up(up_x, up_y, up_z){}
+    };
+    std::vector<prediction> predictions;
+    try
+    {
+        nlohmann::json data = nlohmann::json::parse(json_file);
+        fovx = data["sensor"]["fov_x_rad"];
+        fovy = data["sensor"]["fov_y_rad"];
+        for (auto& p : data["predictions"])
+        {
+            predictions.push_back(prediction(
+                p["filename"],
+                p["eye"]["x"], p["eye"]["y"], p["eye"]["z"],
+                p["center"]["x"], p["center"]["y"], p["center"]["z"],
+                p["up"]["x"], p["up"]["y"], p["up"]["z"]
+            ));
+        }
+    } catch (...)
+    {
+        std::cerr << "ERROR: Could not parse json file.\n" << std::endl;
+        exit(1);
+    }
+}
+
 void renderer::update_reference_image()
 {
     auto reference_image_std = get_current_image();
@@ -1090,7 +1133,10 @@ int main(int argc, char** argv)
 
 //    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
 //                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
-    rend.load_xray(0);
+    if (!rend.json_filename.empty())
+        rend.load_json();
+    if (!rend.xray_filenames.empty())
+        rend.load_xray(0);
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 

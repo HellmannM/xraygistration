@@ -372,10 +372,15 @@ if args.predict is not None:
         print("Test: eye=", eye, " center=", center, " up=", up)
         predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
         print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
-        predictions_dict[image_file] = {
+        predictions_dict["predictions"].append({
+            "filename": image_file,
             "eye": eye,
             "center": center,
             "up": up
+        })
+        predictions_dict["sensor"] = {
+            "fov_x_rad": dd_fov_x_rad,
+            "fov_y_rad": dd_fov_y_rad
         }
         print("predictions_dict:\n", predictions_dict)
 
