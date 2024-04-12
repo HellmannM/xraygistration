@@ -145,89 +145,89 @@ struct feature_matcher
     }
 };
 
-    template<>
-    feature_matcher<cv::xfeatures2d::SURF, cv::SIFT, cv::BFMatcher>::feature_matcher()
-        : detector(cv::xfeatures2d::SURF::create())
-        , descriptor(cv::SIFT::create())
-        , matcher(cv::BFMatcher::create(cv::NORM_L2, true))
-        , matcher_initialized(false)
-        , reference_descriptors()
-        , reference_keypoints()
-        {};
+template<>
+feature_matcher<cv::xfeatures2d::SURF, cv::SIFT, cv::BFMatcher>::feature_matcher()
+    : detector(cv::xfeatures2d::SURF::create())
+    , descriptor(cv::SIFT::create())
+    , matcher(cv::BFMatcher::create(cv::NORM_L2, true))
+    , matcher_initialized(false)
+    , reference_descriptors()
+    , reference_keypoints()
+    {};
 
-    template<>
-    feature_matcher<cv::ORB, cv::ORB, cv::BFMatcher>::feature_matcher()
-        : detector(cv::ORB::create(                             // default values
-                /*int nfeatures     */ 5000,                    // 500
-                /*float scaleFactor */ 1.1f,                    // 1.2f
-                /*int nlevels       */ 15,                      // 8
-                /*int edgeThreshold */ 10,                      // 31
-                /*int firstLevel    */ 0,                       // 0
-                /*int WTA_K         */ 2,                       // 2
-                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
-                /*int patchSize     */ 31,                      // 31
-                /*int fastThreshold */ 10                       // 20
-          ))
-        , descriptor(cv::ORB::create())
-        , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
-        , matcher_initialized(false)
-        , reference_descriptors()
-        , reference_keypoints()
-        {};
+template<>
+feature_matcher<cv::ORB, cv::ORB, cv::BFMatcher>::feature_matcher()
+    : detector(cv::ORB::create(                             // default values
+            /*int nfeatures     */ 5000,                    // 500
+            /*float scaleFactor */ 1.1f,                    // 1.2f
+            /*int nlevels       */ 15,                      // 8
+            /*int edgeThreshold */ 10,                      // 31
+            /*int firstLevel    */ 0,                       // 0
+            /*int WTA_K         */ 2,                       // 2
+            /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
+            /*int patchSize     */ 31,                      // 31
+            /*int fastThreshold */ 10                       // 20
+      ))
+    , descriptor(cv::ORB::create())
+    , matcher(cv::BFMatcher::create(cv::NORM_HAMMING, true))
+    , matcher_initialized(false)
+    , reference_descriptors()
+    , reference_keypoints()
+    {};
 
 #if VSNRAY_COMMON_HAVE_CUDA
-    template<>
-    feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::feature_matcher()
-        : detector(cv::cuda::ORB::create(                             // default values
-                /*int nfeatures     */ 5000,                    // 500
-                /*float scaleFactor */ 1.1f,                    // 1.2f
-                /*int nlevels       */ 15,                      // 8
-                /*int edgeThreshold */ 10,                      // 31
-                /*int firstLevel    */ 0,                       // 0
-                /*int WTA_K         */ 2,                       // 2
-                /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
-                /*int patchSize     */ 31,                      // 31
-                /*int fastThreshold */ 10                       // 20
-          ))
-        , descriptor(cv::cuda::ORB::create())
-        , matcher(cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING))
-        , matcher_initialized(false)
-        , reference_descriptors()
-        , reference_keypoints()
-        {};
+template<>
+feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::feature_matcher()
+    : detector(cv::cuda::ORB::create(                             // default values
+            /*int nfeatures     */ 5000,                    // 500
+            /*float scaleFactor */ 1.1f,                    // 1.2f
+            /*int nlevels       */ 15,                      // 8
+            /*int edgeThreshold */ 10,                      // 31
+            /*int firstLevel    */ 0,                       // 0
+            /*int WTA_K         */ 2,                       // 2
+            /*int scoreType     */ cv::ORB::HARRIS_SCORE,   // cv::ORB::HARRIS_SCORE
+            /*int patchSize     */ 31,                      // 31
+            /*int fastThreshold */ 10                       // 20
+      ))
+    , descriptor(cv::cuda::ORB::create())
+    , matcher(cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING))
+    , matcher_initialized(false)
+    , reference_descriptors()
+    , reference_keypoints()
+    {};
 
-    template<>
-    void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::init(const cv::Mat& reference_image)
-    {
-        reference_keypoints.clear();
-        cv::cuda::GpuMat gpu_reference_image_color(reference_image);
-        cv::cuda::GpuMat gpu_reference_image;
-        cv::cuda::cvtColor(gpu_reference_image_color, gpu_reference_image, cv::COLOR_RGBA2GRAY);
-        detector->detectAndCompute(gpu_reference_image, cv::noArray(), reference_keypoints, gpu_reference_descriptors);
-        matcher->clear();
-        matcher->add({gpu_reference_descriptors});
-        matcher_initialized = true;
-        std::cout << "Found " << gpu_reference_descriptors.size() << " descriptors.\n";
-    }
+template<>
+void feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::init(const cv::Mat& reference_image)
+{
+    reference_keypoints.clear();
+    cv::cuda::GpuMat gpu_reference_image_color(reference_image);
+    cv::cuda::GpuMat gpu_reference_image;
+    cv::cuda::cvtColor(gpu_reference_image_color, gpu_reference_image, cv::COLOR_RGBA2GRAY);
+    detector->detectAndCompute(gpu_reference_image, cv::noArray(), reference_keypoints, gpu_reference_descriptors);
+    matcher->clear();
+    matcher->add({gpu_reference_descriptors});
+    matcher_initialized = true;
+    std::cout << "Found " << gpu_reference_descriptors.size() << " descriptors.\n";
+}
 
-    template<>
-    match_result_t feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::match(const cv::Mat& current_image)
-    {
-        std::vector<cv::KeyPoint> current_keypoints;
-        match_result_t result;
-        cv::cuda::GpuMat gpu_current_descriptors;
-        cv::cuda::GpuMat gpu_current_image_color(current_image);
-        cv::cuda::GpuMat gpu_current_image;
-        cv::cuda::cvtColor(gpu_current_image_color, gpu_current_image, cv::COLOR_RGBA2GRAY);
+template<>
+match_result_t feature_matcher<cv::cuda::ORB, cv::cuda::ORB, cv::cuda::DescriptorMatcher>::match(const cv::Mat& current_image)
+{
+    std::vector<cv::KeyPoint> current_keypoints;
+    match_result_t result;
+    cv::cuda::GpuMat gpu_current_descriptors;
+    cv::cuda::GpuMat gpu_current_image_color(current_image);
+    cv::cuda::GpuMat gpu_current_image;
+    cv::cuda::cvtColor(gpu_current_image_color, gpu_current_image, cv::COLOR_RGBA2GRAY);
 
-        detector->detectAndCompute(gpu_current_image, cv::noArray(), current_keypoints, gpu_current_descriptors);
-        if (!matcher_initialized) return {};
-        matcher->match(gpu_current_descriptors, result.matches);
+    detector->detectAndCompute(gpu_current_image, cv::noArray(), current_keypoints, gpu_current_descriptors);
+    if (!matcher_initialized) return {};
+    matcher->match(gpu_current_descriptors, result.matches);
 
-        result.num_ref_descriptors = gpu_reference_descriptors.size().height;
-        result.reference_keypoints = reference_keypoints;
-        result.query_keypoints = current_keypoints;
-        return result;
-    }
+    result.num_ref_descriptors = gpu_reference_descriptors.size().height;
+    result.reference_keypoints = reference_keypoints;
+    result.query_keypoints = current_keypoints;
+    return result;
+}
 #endif
     
