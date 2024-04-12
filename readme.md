@@ -76,7 +76,9 @@ See [license file](license.md).
 - [Visionaray](https://github.com/szellmann/visionaray)
 - [Deskvox](https://github.com/deskvox/deskvox)
 - [CmdLine](https://github.com/abolz/CmdLine)
+- [nlohmann json](https://github.com/nlohmann/json)
 - [OpenCV](https://github.com/opencv/opencv)
+- [Keras](https://github.com/keras-team/keras)
 
 ## Current work in progress
 See [todo file](todo.md)

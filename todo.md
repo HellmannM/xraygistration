@@ -1,9 +1,11 @@
-#CMake
+# CMake
 - [ ] Fix sources (headers)
 
 # Match
 ### Matcher:
-- [ ] License for SURF/SIFT
+- [ ] Check License for SURF
+- [ ] Fix cuda::ORB constructor in template specialization
+- [ ] Move renderer to own header
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
