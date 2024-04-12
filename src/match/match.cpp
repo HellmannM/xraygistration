@@ -58,7 +58,8 @@
 #include "host_device_rt.h"
 #include "match_result.h"
 #include "orb_matcher.h"
-#include "surf_sift_matcher.h"
+//#include "surf_sift_matcher.h"
+#include "feature_matcher.h"
 #include "render.h"
 #include "timer.h"
 
@@ -187,8 +188,7 @@ struct renderer : viewer_type
     vec3                        bgcolor;
     vec2f                       value_range;
     // matcher
-    //orb_matcher                 matcher;
-    surf_sift_matcher           matcher;
+    feature_matcher<detector_type::SURF, descriptor_type::SIFT, matcher_type::BFMatcher> matcher;
     // pixel select
     int                         selected_point;
     vec2                        selected_pixels[4];
@@ -196,7 +196,7 @@ struct renderer : viewer_type
     ray_type_cpu                saved_rays[4];
 
     void load_volume();
-    void load_xray(const size_t idx);
+    void load_xray(const std::string& filename);
     void load_json();
     void update_reference_image();
     void update_reference_image(const cv::Mat& image);
@@ -1027,10 +1027,10 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
 #endif
 }
 
-void renderer::load_xray(const size_t idx)
+void renderer::load_xray(const std::string& filename)
 {
     int width, height;
-    if (!xray_filenames.empty() && matcher.load_reference_image(xray_filenames[idx], width, height))
+    if (!xray_filenames.empty() && matcher.load_reference_image(filename, width, height))
     {
         on_resize(width, height);
     }
@@ -1136,7 +1136,7 @@ int main(int argc, char** argv)
     if (!rend.json_filename.empty())
         rend.load_json();
     if (!rend.xray_filenames.empty())
-        rend.load_xray(0);
+        rend.load_xray(rend.xray_filenames[0]);
 
     float aspect = rend.width() / static_cast<float>(rend.height());
 
@@ -1170,7 +1170,7 @@ extern "C"
             renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
             rend->init(argc, argv);
             rend->load_volume();
-            rend->load_xray(0);
+            rend->load_xray(rend->xray_filenames[0]);
 
             float aspect = rend->width() / static_cast<float>(rend->height());
 
