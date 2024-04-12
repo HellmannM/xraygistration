@@ -57,8 +57,6 @@
 
 #include "host_device_rt.h"
 #include "match_result.h"
-#include "orb_matcher.h"
-//#include "surf_sift_matcher.h"
 #include "feature_matcher.h"
 #include "render.h"
 #include "timer.h"
@@ -1131,8 +1129,6 @@ int main(int argc, char** argv)
     }
     rend.load_volume();
 
-//    rend.matcher.mode = (rend.rt.mode() == host_device_rt::CPU) ?
-//                         orb_matcher::matcher_mode::CPU : orb_matcher::matcher_mode::GPU;
     if (!rend.json_filename.empty())
         rend.load_json();
     if (!rend.xray_filenames.empty())

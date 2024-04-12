@@ -60,7 +60,7 @@ include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
 set(MATCH_HEADERS
     host_device_rt.h
     match_result.h
-    orb_matcher.h
+    feature_matcher.h
     render.h
     timer.h
 )
