@@ -1,6 +1,8 @@
+#CMake
+- [ ] Fix sources (headers)
+
 # Match
 ### Matcher:
-- [ ] Use SURF Detector + SIFT Descriptor instead of ORB.
 - [ ] License for SURF/SIFT
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
