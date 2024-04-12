@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <ostream>
@@ -199,6 +200,7 @@ struct renderer : viewer_type
     void update_reference_image();
     void update_reference_image(const cv::Mat& image);
     match_result_t match();
+    void screenshot();
     void search();
     void search_2d2d();
     size_t search_3d2d();
@@ -280,6 +282,90 @@ void renderer::on_display(bool display)
         glClearColor(color.x, color.y, color.z, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glDisable(GL_SCISSOR_TEST);
+    }
+}
+
+void renderer::screenshot()
+{
+#if VSNRAY_COMMON_HAVE_PNG
+    static const std::string screenshot_file_suffix = ".png";
+    image::save_option opt1;
+#else
+    static const std::string screenshot_file_suffix = ".pnm";
+    image::save_option opt1({"binary", true});
+#endif
+
+    // Swizzle to RGB8 for compatibility with pnm image
+    std::vector<vector<3, unorm<8>>> rgb(rt.width() * rt.height());
+    swizzle(
+        rgb.data(),
+        PF_RGB8,
+        rt.color(),
+        PF_RGBA32F,
+        rt.width() * rt.height(),
+        TruncateAlpha
+        );
+
+    if (rt.color_space() == host_device_rt::SRGB)
+    {
+        for (int y = 0; y < rt.height(); ++y)
+        {
+            for (int x = 0; x < rt.width(); ++x)
+            {
+                auto& color = rgb[y * rt.width() + x];
+                color.x = powf(color.x, 1 / 2.2f);
+                color.y = powf(color.y, 1 / 2.2f);
+                color.z = powf(color.z, 1 / 2.2f);
+            }
+        }
+    }
+
+    // Flip so that origin is (top|left)
+    std::vector<vector<3, unorm<8>>> flipped(rt.width() * rt.height());
+
+    for (int y = 0; y < rt.height(); ++y)
+    {
+        for (int x = 0; x < rt.width(); ++x)
+        {
+            int yy = rt.height() - y - 1;
+            flipped[yy * rt.width() + x] = rgb[y * rt.width() + x];
+        }
+    }
+
+    image img(
+        rt.width(),
+        rt.height(),
+        PF_RGB8,
+        reinterpret_cast<uint8_t const*>(flipped.data())
+        );
+
+    int inc = 0;
+    std::string inc_str = "";
+
+    std::string filename = "screenshot" + inc_str + screenshot_file_suffix;
+
+    while (std::filesystem::exists(filename))
+    {
+        ++inc;
+        inc_str = std::to_string(inc);
+
+        while (inc_str.length() < 4)
+        {
+            inc_str = std::string("0") + inc_str;
+        }
+
+        inc_str = std::string("-") + inc_str;
+
+        filename = "screenshot" + inc_str + screenshot_file_suffix;
+    }
+
+    if (img.save(filename, {opt1}))
+    {
+        std::cout << "Screenshot saved to file: " << filename << '\n';
+    }
+    else
+    {
+        std::cerr << "Error saving screenshot to file: " << filename << '\n';
     }
 }
 
@@ -703,15 +789,18 @@ void renderer::on_key_press(key_event const& event)
         {
             std::cout << "Switching to GPU.\n";
             rt.mode() = host_device_rt::GPU;
-//            matcher.mode = orb_matcher::matcher_mode::GPU;
         }
         else
         {
             std::cout << "Switching to CPU.\n";
             rt.mode() = host_device_rt::CPU;
-//            matcher.mode = orb_matcher::matcher_mode::CPU;
         }
 #endif
+        break;
+
+    case 'p':
+        std::cout << "Saving screenshot.\n";
+        screenshot();
         break;
 
     case 'r':
