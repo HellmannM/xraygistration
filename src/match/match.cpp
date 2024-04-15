@@ -287,6 +287,12 @@ void renderer::on_display(bool display)
 
 void renderer::screenshot()
 {
+    std::cout << "Taking screenshot with current camera:\n"
+              << "eye: " << cam.eye() << "\n"
+              << "center: " << cam.center() << "\n"
+              << "up: " << cam.up() << "\n"
+              << "dir: " << normalize(cam.up() - cam.eye()) << "\n";
+
 #if VSNRAY_COMMON_HAVE_PNG
     static const std::string screenshot_file_suffix = ".png";
     image::save_option opt1;
@@ -340,7 +346,6 @@ void renderer::screenshot()
 
     // Flip so that origin is (top|left)
     std::vector<vector<3, unorm<8>>> flipped(rt.width() * rt.height());
-
     for (int y = 0; y < rt.height(); ++y)
     {
         for (int x = 0; x < rt.width(); ++x)
@@ -350,12 +355,37 @@ void renderer::screenshot()
         }
     }
 
+#if 0
+    // Crop
+    size_t crop_left   = 100;
+    size_t crop_right  = 100;
+    size_t crop_top    = 50;
+    size_t crop_bottom = 50;
+    size_t cropped_width = rt.width() - crop_left - crop_right;
+    size_t cropped_height = rt.height() - crop_top - crop_bottom;
+    std::vector<vector<3, unorm<8>>> cropped(cropped_width * cropped_height);
+    for (int y = crop_top; y < (rt.height() - crop_bottom); ++y)
+    {
+        for (int x = crop_left; x < (rt.width() - crop_right); ++x)
+        {
+            cropped[(y - crop_top) * cropped_width + (x - crop_left)] = flipped[y * rt.width() + x];
+        }
+    }
+
+    image img(
+        cropped_width,
+        cropped_height,
+        PF_RGB8,
+        reinterpret_cast<uint8_t const*>(cropped.data())
+        );
+#else
     image img(
         rt.width(),
         rt.height(),
         PF_RGB8,
         reinterpret_cast<uint8_t const*>(flipped.data())
         );
+#endif
 
     int inc = 0;
     std::string inc_str = "";
