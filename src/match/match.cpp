@@ -295,16 +295,34 @@ void renderer::screenshot()
     image::save_option opt1({"binary", true});
 #endif
 
+    std::vector<vector<4, unorm<8>>> rgba(rt.width() * rt.height());
+    if (rt.mode() == host_device_rt::CPU)
+    {
+        memcpy(
+            rgba.data(),
+            rt.color(host_device_rt::buffer::Front),
+            rt.width() * rt.height() * sizeof(vector<4, unorm<8>>)
+            );
+    }
+#if VSNRAY_COMMON_HAVE_CUDA
+    else if (rt.mode() == host_device_rt::GPU)
+    {
+        cudaMemcpy(
+            rgba.data(),
+            rt.color(host_device_rt::buffer::Front),
+            rt.width() * rt.height() * sizeof(vector<4, unorm<8>>),
+            cudaMemcpyDeviceToHost
+            );
+    }
+#endif
+
     // Swizzle to RGB8 for compatibility with pnm image
+    // Note: visionaray::swizzle broken?!
     std::vector<vector<3, unorm<8>>> rgb(rt.width() * rt.height());
-    swizzle(
-        rgb.data(),
-        PF_RGB8,
-        rt.color(),
-        PF_RGBA32F,
-        rt.width() * rt.height(),
-        TruncateAlpha
-        );
+    for (size_t i = 0; i < rgba.size(); ++i)
+    {
+        rgb[i] = vector<3, unorm<8>>(rgba[i].x, rgba[i].y, rgba[i].z);
+    }
 
     if (rt.color_space() == host_device_rt::SRGB)
     {
@@ -1067,51 +1085,7 @@ std::vector<vector<4, unorm<8>>> renderer::get_current_image()
     }
 #endif
 
-#if 0
-    swizzle(
-        rgb.data(),
-        PF_RGB8,
-        rt.color(),
-        PF_RGBA32F,
-        //PF_RGB8,
-        rt.width() * rt.height(),
-        TruncateAlpha
-        );
-
-    if (rt.color_space() == host_device_rt::SRGB)
-    {
-        for (int y = 0; y < rt.height(); ++y)
-        {
-            for (int x = 0; x < rt.width(); ++x)
-            {
-                auto& color = rgb[y * rt.width() + x];
-                color.x = powf(color.x, 1 / 2.2f);
-                color.y = powf(color.y, 1 / 2.2f);
-                color.z = powf(color.z, 1 / 2.2f);
-            }
-        }
-    }
-#endif
-
-//#define FLIP_IMAGE
-#ifdef FLIP_IMAGE
-// flip before displaying with opencv. solvepnp will get confused however
-    // Flip so that origin is (top|left)
-    std::vector<vector<4, unorm<8>>> flipped(rt.width() * rt.height());
-
-    for (int y = 0; y < rt.height(); ++y)
-    {
-        for (int x = 0; x < rt.width(); ++x)
-        {
-            int yy = rt.height() - y - 1;
-            flipped[yy * rt.width() + x] = rgba[y * rt.width() + x];
-        }
-    }
-
-    return flipped;
-#else
     return rgba;
-#endif
 }
 
 void renderer::load_xray(const std::string& filename)
