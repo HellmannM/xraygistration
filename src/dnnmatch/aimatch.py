@@ -2,6 +2,7 @@
 
 import argparse
 import ctypes as c
+import imageio.v3 as iio
 import json
 import matplotlib.pyplot as plotter_lib
 import numpy as np
@@ -31,7 +32,7 @@ import tensorflow as tf
 parser = argparse.ArgumentParser(description='Train DNN on volume and/or predict X-ray cam args.')
 parser.add_argument('--load', type=str, help='Load pre-trained DNN model (path to file).')
 parser.add_argument('--train', type=str, help='Train DNN model on nii volume (path to file).')
-parser.add_argument('--store', type=str, help='Export trained DNN model file (path to file).')
+parser.add_argument('--save', type=str, help='Export trained DNN model file (path to file).')
 parser.add_argument('--predict', type=str, nargs='?', help='Predict cam args for dcm files (paths to files)')
 parser.add_argument('--export_predictions', type=str, help='Export predicted coords as json (path to file).')
 parser.add_argument('--calibrate', type=str, help='Read sensor data for calibration from dicom file (path to file).')
@@ -39,8 +40,8 @@ args = parser.parse_args()
 
 ## CT invariables -----------------------------------------------------
 # default values
-dd_fov_x_rad = b'0.31535198085001725'
-dd_fov_y_rad = b'0.24426769480863722'
+dd_fov_x_rad = 0.31535198085001725
+dd_fov_y_rad = 0.24426769480863722
 if args.calibrate is not None:
     if not os.path.isfile(args.calibrate):
         print("ERROR: could not find calibration file: ", args.calibrate)
@@ -49,12 +50,14 @@ if args.calibrate is not None:
     import dicomreader as dr
     print("Reading file: ", args.calibrate)
     dd = dr.read_dicom(args.calibrate)
-    dd_fov_x_rad = str(dd.fov_x_rad).encode("UTF-8")
-    dd_fov_y_rad = str(dd.fov_y_rad).encode("UTF-8")
+    dd_fov_x_rad = dd.fov_x_rad
+    dd_fov_y_rad = dd.fov_y_rad
     print(dd)
 
 
 ## Renderer setup -----------------------------------------------------
+dim_x = 500
+dim_y = 384
 if args.train is not None:
     # Load C++ rendering libs
     stdc      = c.cdll.LoadLibrary("libc.so.6")
@@ -69,9 +72,9 @@ if args.train is not None:
                    c.create_string_buffer(b"-device"),
                    c.create_string_buffer(b"gpu"),
                    c.create_string_buffer(b"-fovx"),
-                   c.create_string_buffer(dd_fov_x_rad),
+                   c.create_string_buffer(str(dd_fov_x_rad).encode("UTF-8")),
                    c.create_string_buffer(b"-fovy"),
-                   c.create_string_buffer(dd_fov_y_rad)
+                   c.create_string_buffer(str(dd_fov_y_rad).encode("UTF-8"))
                   ]
     arg_ptrs    = (c.c_char_p * len(arg_buffers))(*map(c.addressof, arg_buffers))
     renderlib.init_renderer(renderer, len(arg_buffers), arg_ptrs)
@@ -84,6 +87,9 @@ if args.train is not None:
     renderer_width = c.c_int(get_width_wrapper(renderer))
     renderer_height = c.c_int(get_height_wrapper(renderer))
     renderer_bpp = c.c_int(get_bpp_wrapper(renderer))
+    #TODO why is x and y swapped?
+    dim_y = renderer_width.value
+    dim_x = renderer_height.value
 
 def spherical_to_cartesian(spherical):
     r     = spherical[0]
@@ -262,12 +268,6 @@ class DataGenerator(tf.keras.utils.Sequence):
 
 
 ## Model ---------------------------------------------------------------
-# Parameters
-dim_y = renderer_width.value
-dim_x = renderer_height.value
-params = {'dim': (dim_x, dim_y),
-          'batch_size': 16,
-          'n_channels': 3}  #n_channels must be 3 for resnet
 
 # Setup model
 model = tf.keras.models.Sequential()
@@ -277,9 +277,15 @@ if args.load is not None:
         print("ERROR: could not find pre-trained model file: ", args.load)
         exit(1)
     print('loading trained model...')
-    model = tf.keras.models.load_model('trained_model.keras')
+    model = tf.keras.models.load_model(args.load)
 else:
     print('No pre-trained model specified. Creating new model...')
+
+    # Parameters
+    params = {'dim': (dim_x, dim_y),
+              'batch_size': 16,
+              'n_channels': 3}  #n_channels must be 3 for resnet
+
     model.add(tf.keras.layers.Resizing(height=224, width=224, interpolation='bilinear', crop_to_aspect_ratio=True))
     resnet = tf.keras.applications.InceptionResNetV2(include_top=False,
                        #input_shape=(dim_x, dim_y, 3),
@@ -299,9 +305,6 @@ else:
     model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.build(input_shape=(None, dim_x, dim_y, 3))
 
-# Generators
-training_generator   = DataGenerator(batches_per_epoch=32, **params)
-validation_generator = DataGenerator(batches_per_epoch=4, **params)
 
 def plot_step(fit_history, epochs, learning_rate, index):
     fig, ax = plotter_lib.subplots()
@@ -325,6 +328,9 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
 
 ## Training ------------------------------------------------------------
 if args.train is not None:
+    training_generator   = DataGenerator(batches_per_epoch=32, **params)
+    validation_generator = DataGenerator(batches_per_epoch=4, **params)
+
     step = 1
     epochs = 60
     learning_rate=1e-3
@@ -352,47 +358,49 @@ if args.train is not None:
 
 ## Prediction ----------------------------------------------------------
 if args.predict is not None:
-    predictions_dict = dict()
-    for image_file in args.predict:
-        #TODO load file...
-        print("predict...")
-        eye = [1670, 0, 0]
-        center = [0, 0, 0]
-        up = [0, 1, 0]
-        test_cam = np.concatenate((eye, center, up))
-        mapped_test_cam = map_camera(test_cam, eye_dist_max, center_dist_max)
-        test_image = get_frame(test_cam, random_vignette=True, random_integration_coefficient=False)
+    predictions_dict = {"predictions":[]}
+    for image_file in args.predict.split(","):
+        print("predict ", image_file)
         #import cv2 as cv
         #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
-        #cv.imshow("Display Image", test_image);
+        #cv.imshow("Display Image", image);
         #cv.waitKey(0);
 
-        preprocessed_test_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(test_image, axis=0), data_format='channels_last')
-        test_prediction=model(preprocessed_test_image, training=False)
-        print("Test: eye=", eye, " center=", center, " up=", up)
-        predicted_cam = restore_camera(test_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
-        print("Pred: eye=", predicted_cam[0:3], " center=", predicted_cam[3:6], " up=", predicted_cam[6:9])
+        image = iio.imread(image_file)
+        print("loaded image shape: ", image.shape)
+
+        preprocessed_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(image, axis=0), data_format='channels_last')
+        mapped_camera_prediction = model(preprocessed_image, training=False)
+        camera_prediction = restore_camera(mapped_camera_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
+        eye    = camera_prediction[0:3]
+        center = camera_prediction[3:6]
+        up     = camera_prediction[6:9]
+        print("eye=", eye, " center=", center, " up=", up)
+
         predictions_dict["predictions"].append({
-            "filename": image_file,
-            "eye": eye,
-            "center": center,
-            "up": up
+            "file": image_file,
+            "eye":    {"x":eye[0],    "y":eye[1],    "z":eye[2]},
+            "center": {"x":center[0], "y":center[1], "z":center[2]},
+            "up":     {"x":up[0],     "y":up[1],     "z":up[2]},
         })
-        predictions_dict["sensor"] = {
-            "fov_x_rad": dd_fov_x_rad,
-            "fov_y_rad": dd_fov_y_rad
-        }
-        print("predictions_dict:\n", predictions_dict)
+
+    predictions_dict["sensor"] = {
+        "fov_x_rad": dd_fov_x_rad,
+        "fov_y_rad": dd_fov_y_rad
+    }
+    print("predictions_dict:\n", json.dumps(predictions_dict, ensure_ascii=False, indent=4))
 
     # export predictions as json
     if args.export_predictions is not None:
-        with open(json_filename, 'w', encoding='utf-8') as json_file:
-          json.dump(data, json_file, ensure_ascii=False, indent=4)
+        with open(args.export_predictions, 'w', encoding='utf-8') as json_file:
+          json.dump(predictions_dict, json_file, ensure_ascii=False, indent=4)
 
 ## Save Model ----------------------------------------------------------
-if args.store is not None:
-    print("Saving model as: ", args.store)
-    model.save(args.store)
+if args.save is not None:
+    if (len(args.save) < 7) or (args.save[-6:] != ".keras"):
+        args.save += ".keras"
+    print("Saving model as: ", args.save)
+    model.save(args.save)
 
 ## Cleanup -------------------------------------------------------------
 if args.train is not None:
