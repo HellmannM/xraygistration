@@ -1127,6 +1127,25 @@ void renderer::load_xray(const std::string& filename)
     }
 }
 
+//TODO Cleanup and move to appropriate place
+struct prediction
+{
+    std::string filename;
+    vec3f eye;
+    vec3f center;
+    vec3f up;
+    prediction(std::string file,
+                float eye_x, float eye_y, float eye_z,
+                float center_x, float center_y, float center_z,
+                float up_x, float up_y, float up_z)
+        : filename(file), eye(eye_x, eye_y, eye_z), center(center_x, center_y, center_z), up(up_x, up_y, up_z){}
+};
+std::ostream& operator<<(std::ostream& os, const prediction& p)
+{
+    os << p.filename << "\neye: " << p.eye << "\ncenter: " << p.center << "\nup: " << p.up << "\n";
+    return os;
+}
+
 void renderer::load_json()
 {
     std::ifstream json_file(json_filename);
@@ -1135,18 +1154,7 @@ void renderer::load_json()
         std::cerr << "ERROR: Could not open json file: " << json_filename << "\n" << std::strerror(errno) << std::endl;
         exit(1);
     }
-    struct prediction
-    {
-        std::string filename;
-        vec3f eye;
-        vec3f center;
-        vec3f up;
-        prediction(std::string file,
-                    float eye_x, float eye_y, float eye_z,
-                    float center_x, float center_y, float center_z,
-                    float up_x, float up_y, float up_z)
-            : filename(file), eye(eye_x, eye_y, eye_z), center(center_x, center_y, center_z), up(up_x, up_y, up_z){}
-    };
+
     std::vector<prediction> predictions;
     try
     {
@@ -1156,11 +1164,12 @@ void renderer::load_json()
         for (auto& p : data["predictions"])
         {
             predictions.push_back(prediction(
-                p["filename"],
+                p["file"],
                 p["eye"]["x"], p["eye"]["y"], p["eye"]["z"],
                 p["center"]["x"], p["center"]["y"], p["center"]["z"],
                 p["up"]["x"], p["up"]["y"], p["up"]["z"]
             ));
+            std::cout << "Loaded predictions:\n" << predictions.back();
         }
     } catch (...)
     {
