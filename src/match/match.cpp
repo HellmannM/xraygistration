@@ -56,9 +56,10 @@
 // JSON includes
 #include <nlohmann/json.hpp>
 
+#include "feature_matcher.h"
 #include "host_device_rt.h"
 #include "match_result.h"
-#include "feature_matcher.h"
+#include "prediction.h"
 #include "render.h"
 #include "timer.h"
 
@@ -193,9 +194,11 @@ struct renderer : viewer_type
     vec2                        selected_pixels[4];
     pinhole_camera              saved_cameras[2];
     ray_type_cpu                saved_rays[4];
+    std::vector<prediction>     predictions;
 
     void load_volume();
     void load_xray(const std::string& filename);
+    void load_xray(int idx);
     void load_json();
     void update_reference_image();
     void update_reference_image(const cv::Mat& image);
@@ -891,10 +894,14 @@ void renderer::on_key_press(key_event const& event)
         break;
 
     case keyboard::key::F1:
-        if (event.modifiers() == 0x00000004)
+        if (event.modifiers() == keyboard::key::Shift)
         {
             std::cout << "Jumping to saved cam 1.\n";
             cam = saved_cameras[0];
+        } else if (event.modifiers() == keyboard::key::Ctrl)
+        {
+            std::cout << "Loading prediction 1.\n";
+            load_xray(0);
         } else
         {
             std::cout << "Saved current cam 1." << "\n";
@@ -903,10 +910,14 @@ void renderer::on_key_press(key_event const& event)
         break;
 
     case keyboard::key::F2:
-        if (event.modifiers() == 0x00000004)
+        if (event.modifiers() == keyboard::key::Shift)
         {
             std::cout << "Jumping to saved cam 2.\n";
             cam = saved_cameras[1];
+        } else if (event.modifiers() == keyboard::key::Ctrl)
+        {
+            std::cout << "Loading prediction 2.\n";
+            load_xray(1);
         } else
         {
             std::cout << "Saved current cam 2." << "\n";
@@ -1127,23 +1138,14 @@ void renderer::load_xray(const std::string& filename)
     }
 }
 
-//TODO Cleanup and move to appropriate place
-struct prediction
+void renderer::load_xray(int idx)
 {
-    std::string filename;
-    vec3f eye;
-    vec3f center;
-    vec3f up;
-    prediction(std::string file,
-                float eye_x, float eye_y, float eye_z,
-                float center_x, float center_y, float center_z,
-                float up_x, float up_y, float up_z)
-        : filename(file), eye(eye_x, eye_y, eye_z), center(center_x, center_y, center_z), up(up_x, up_y, up_z){}
-};
-std::ostream& operator<<(std::ostream& os, const prediction& p)
-{
-    os << p.filename << "\neye: " << p.eye << "\ncenter: " << p.center << "\nup: " << p.up << "\n";
-    return os;
+    load_xray(predictions[idx].filename);
+    cam.look_at(
+        predictions[idx].eye,
+        predictions[idx].center,
+        predictions[idx].up
+    );
 }
 
 void renderer::load_json()
@@ -1154,13 +1156,18 @@ void renderer::load_json()
         std::cerr << "ERROR: Could not open json file: " << json_filename << "\n" << std::strerror(errno) << std::endl;
         exit(1);
     }
+    predictions.clear();
+    std::cout << "Loading predictions:\n";
 
-    std::vector<prediction> predictions;
     try
     {
         nlohmann::json data = nlohmann::json::parse(json_file);
+
         fovx = data["sensor"]["fov_x_rad"];
         fovy = data["sensor"]["fov_y_rad"];
+        std::cout << "fovx: " << fovx << "\n";
+        std::cout << "fovy: " << fovy << "\n";
+
         for (auto& p : data["predictions"])
         {
             predictions.push_back(prediction(
@@ -1169,7 +1176,7 @@ void renderer::load_json()
                 p["center"]["x"], p["center"]["y"], p["center"]["z"],
                 p["up"]["x"], p["up"]["y"], p["up"]["z"]
             ));
-            std::cout << "Loaded predictions:\n" << predictions.back();
+            std::cout << predictions.back() << "\n";
         }
     } catch (...)
     {
@@ -1233,6 +1240,7 @@ int main(int argc, char** argv)
 
     if (!rend.json_filename.empty())
         rend.load_json();
+    //TODO Obsolete... Maybe modify to be useful for debugging
     if (!rend.xray_filenames.empty())
         rend.load_xray(rend.xray_filenames[0]);
 
@@ -1268,6 +1276,7 @@ extern "C"
             renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
             rend->init(argc, argv);
             rend->load_volume();
+            //TODO
             rend->load_xray(rend->xray_filenames[0]);
 
             float aspect = rend->width() / static_cast<float>(rend->height());
