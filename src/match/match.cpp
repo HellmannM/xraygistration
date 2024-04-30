@@ -834,6 +834,13 @@ void renderer::on_key_press(key_event const& event)
         }
         break;
 
+    case 'l':
+        std::cout << "Current cam:\n"
+                << "eye: " << cam.eye() << "\n"
+                << "center: " << cam.center() << "\n"
+                << "up: " << cam.up() << "\n";
+        break;
+
    case 'm':
 #if VSNRAY_COMMON_HAVE_CUDA
         if (rt.mode() == host_device_rt::CPU)
