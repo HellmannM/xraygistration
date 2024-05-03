@@ -24,6 +24,4 @@
 
 
 # DNNMATCH
-- [ ] add canny edge filter before feeding to net?
-- [ ] repeatable test: add fixed (instead of random) crop to test image
 - [ ] research normalized flow / flow matching

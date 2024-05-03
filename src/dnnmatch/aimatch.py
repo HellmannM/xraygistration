@@ -2,6 +2,7 @@
 
 import argparse
 import ctypes as c
+import cv2 as cv
 import imageio.v3 as iio
 import json
 import matplotlib.pyplot as plotter_lib
@@ -191,7 +192,14 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
         vignetted = np.full(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8, fill_value=255)
         vignetted[y_min:y_max, x_min:x_max] = image_buff[y_min:y_max, x_min:x_max]
         image_buff = vignetted
-    return image_buff[:, :, 0:3]
+
+    # Canny edge detection
+    edges = cv.Canny(image_buff[:, :, 0:3], 50, 100)
+    edges = np.repeat(edges[..., np.newaxis], 3, -1)
+    #iio.imwrite("canny-o.png", img)
+    #iio.imwrite("canny.png", edges)
+    #exit(0)
+    return edges
 
 def init_gl():
     renderlib.init_gl()
@@ -369,7 +377,11 @@ if args.predict is not None:
         image = iio.imread(image_file)
         print("loaded image shape: ", image.shape)
 
-        preprocessed_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(image, axis=0), data_format='channels_last')
+        # Canny edge detection
+        edges = cv.Canny(image, 50, 100)
+        edges = np.repeat(edges[..., np.newaxis], 3, -1)
+
+        preprocessed_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(edges, axis=0), data_format='channels_last')
         mapped_camera_prediction = model(preprocessed_image, training=False)
         camera_prediction = restore_camera(mapped_camera_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
         eye    = camera_prediction[0:3]
@@ -405,3 +417,4 @@ if args.save is not None:
 ## Cleanup -------------------------------------------------------------
 if args.train is not None:
     renderlib.destroy_renderer(renderer)
+
