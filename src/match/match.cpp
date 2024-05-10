@@ -194,7 +194,7 @@ struct renderer : viewer_type
     vec2                        selected_pixels[4];
     pinhole_camera              saved_cameras[2];
     ray_type_cpu                saved_rays[4];
-    std::vector<prediction>     predictions;
+    prediction_container        predictions;
 
     void load_volume();
     void load_xray(const std::string& filename);
@@ -1157,39 +1157,7 @@ void renderer::load_xray(int idx)
 
 void renderer::load_json()
 {
-    std::ifstream json_file(json_filename);
-    if (json_file.fail())
-    {
-        std::cerr << "ERROR: Could not open json file: " << json_filename << "\n" << std::strerror(errno) << std::endl;
-        exit(1);
-    }
-    predictions.clear();
-    std::cout << "Loading predictions:\n";
-
-    try
-    {
-        nlohmann::json data = nlohmann::json::parse(json_file);
-
-        fovx = data["sensor"]["fov_x_rad"];
-        fovy = data["sensor"]["fov_y_rad"];
-        std::cout << "fovx: " << fovx << "\n";
-        std::cout << "fovy: " << fovy << "\n";
-
-        for (auto& p : data["predictions"])
-        {
-            predictions.push_back(prediction(
-                p["file"],
-                p["eye"]["x"], p["eye"]["y"], p["eye"]["z"],
-                p["center"]["x"], p["center"]["y"], p["center"]["z"],
-                p["up"]["x"], p["up"]["y"], p["up"]["z"]
-            ));
-            std::cout << predictions.back() << "\n";
-        }
-    } catch (...)
-    {
-        std::cerr << "ERROR: Could not parse json file.\n" << std::endl;
-        exit(1);
-    }
+    predictions.load_json(json_filename, fovx, fovy);
 }
 
 void renderer::update_reference_image()
