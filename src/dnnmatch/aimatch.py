@@ -168,7 +168,7 @@ def restore_camera(camera, eye_dist_max, center_dist_max):
     up_c     = spherical_to_cartesian(up)
     return np.concatenate((eye_c, center_c, up_c))
 
-def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False):
+def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False, canny_edges=True):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -180,10 +180,17 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
     up_x =     (c.c_float)(camera[6])
     up_y =     (c.c_float)(camera[7])
     up_z =     (c.c_float)(camera[8])
+
     if random_integration_coefficient == True:
         random_integration_coefficient *= np.random.uniform(0.6, 1.15);
     int_coeff = (c.c_float)(integration_coefficient)
     renderlib.single_shot(renderer, image_buff_ptr, int_coeff, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
+
+    if canny_edges == True:
+        edges = cv.Canny(image_buff[:, :, 0:3], 50, 100)
+        edges = np.repeat(edges[..., np.newaxis], 3, -1)
+        image_buff = edges
+
     if random_vignette == True:
         x_min = np.random.randint(renderer_width.value * 0.2, renderer_width.value * 0.45)
         x_max = np.random.randint(renderer_width.value * 0.55, renderer_width.value * 0.8)
@@ -193,13 +200,11 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
         vignetted[y_min:y_max, x_min:x_max] = image_buff[y_min:y_max, x_min:x_max]
         image_buff = vignetted
 
-    # Canny edge detection
-    edges = cv.Canny(image_buff[:, :, 0:3], 50, 100)
-    edges = np.repeat(edges[..., np.newaxis], 3, -1)
     #iio.imwrite("canny-o.png", img)
-    #iio.imwrite("canny.png", edges)
+    #iio.imwrite("canny.png", image_buff)
     #exit(0)
-    return edges
+
+    return image_buff
 
 def init_gl():
     renderlib.init_gl()
@@ -264,7 +269,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             mapped_camera = map_camera(true_camera, eye_dist_max, center_dist_max)
 
             y[i] = mapped_camera
-            X[i,] = get_frame(true_camera, random_vignette=True, random_integration_coefficient=True)
+            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=True, canny_edges=True)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
