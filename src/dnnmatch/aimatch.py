@@ -37,6 +37,7 @@ parser.add_argument('--save', type=str, help='Export trained DNN model file (pat
 parser.add_argument('--predict', type=str, nargs='?', help='Predict cam args for dcm files (paths to files)')
 parser.add_argument('--export_predictions', type=str, help='Export predicted coords as json (path to file).')
 parser.add_argument('--calibrate', type=str, help='Read sensor data for calibration from dicom file (path to file).')
+parser.add_argument('--crop', type=str, help='Crop images to top-left and bottom-right corners: tlx, tly, brx, bry / ... / ...')
 args = parser.parse_args()
 
 ## CT invariables -----------------------------------------------------
@@ -372,7 +373,17 @@ if args.train is not None:
 ## Prediction ----------------------------------------------------------
 if args.predict is not None:
     predictions_dict = {"predictions":[]}
-    for image_file in args.predict.split(","):
+    image_files = args.predict.split(",")
+
+    crop_edges_list = ''
+    if args.crop is not None:
+        crop_edges_list = args.crop.split("/")
+        if len(crop_edges_list) is not len(image_files):
+            print("ERROR: Need to specify crop values for none or all images.")
+            exit(1)
+
+    for i in range(0, len(image_files)):
+        image_file = image_files[i]
         print("predict ", image_file)
         #import cv2 as cv
         #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
@@ -383,10 +394,23 @@ if args.predict is not None:
         print("loaded image shape: ", image.shape)
 
         # Canny edge detection
-        edges = cv.Canny(image, 50, 100)
-        edges = np.repeat(edges[..., np.newaxis], 3, -1)
+        image = cv.Canny(image, 50, 100)
+        image = np.repeat(image[..., np.newaxis], 3, -1)
 
-        preprocessed_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(edges, axis=0), data_format='channels_last')
+        # Crop
+        if args.crop is not None:
+            crop_edges = crop_edges_list[i].split(",")
+            x_min = int(crop_edges[0])
+            y_min = int(crop_edges[1])
+            x_max = int(crop_edges[2])
+            y_max = int(crop_edges[3])
+            vignetted = np.full(shape=image.shape, dtype=np.uint8, fill_value=255)
+            vignetted[y_min:y_max, x_min:x_max] = image[y_min:y_max, x_min:x_max]
+            image = vignetted
+
+        #iio.imwrite("canny-cropped"+str(i)+".png", image)
+
+        preprocessed_image = tf.keras.applications.inception_resnet_v2.preprocess_input(np.expand_dims(image, axis=0), data_format='channels_last')
         mapped_camera_prediction = model(preprocessed_image, training=False)
         camera_prediction = restore_camera(mapped_camera_prediction[0, 0:11].numpy(), eye_dist_max, center_dist_max)
         eye    = camera_prediction[0:3]
