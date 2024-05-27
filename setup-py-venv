@@ -1,0 +1,2 @@
+python -m venv ~/.venv/aimatch
+~/.venv/aimatch/bin/pip3 install numpy tensorflow matplotlib dicomreader pydicom ctypes opencv-python tensorrt
