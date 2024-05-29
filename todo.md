@@ -6,6 +6,8 @@
 - [ ] Check License for SURF
 - [ ] Fix cuda::ORB constructor in template specialization
 - [ ] Move renderer to own header
+- [ ] Better depth estimation / back projection
+      maybe copy from "A CNN Regression Approach for Real-Time 2D 3D Registration"
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
