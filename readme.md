@@ -69,6 +69,14 @@ Localize objects from two (non-collinear) X-Ray images in CT-volumetric data wit
     * Generate DRR with current estimation
     * Update current estimation with reconstructed perspective change
 
+## Command examples
+- Train
+    TF_GPU_ALLOCATOR=cuda_malloc_async python3 ./aimatch.py --train ../testfiles/Dummy_Paul_nifti/2__head_10_stx_head.nii --save canny_model_long_novignette
+- Predict
+    TF_GPU_ALLOCATOR=cuda_malloc_async python3 ./aimatch.py --load canny_model_long.keras --predict ../testfiles/testimage1.png,../testfiles/testimage2.png --crop 0,0,150,150/0,0,300,150 --export_predictions predictions_test.json
+- Render and load predictions
+    ./src/match/match ../testfiles/Dummy_Paul_nifti/2__head_10_stx_head.nii -device gpu -json ./predictions.json
+
 ## Licensing
 See [license file](license.md).
 
