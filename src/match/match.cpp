@@ -945,6 +945,16 @@ void renderer::on_key_press(key_event const& event)
         break;
     }
 
+    case keyboard::key::F11:
+        std::cout << "Loading prediction 1.\n";
+        load_xray(0);
+        break;
+
+    case keyboard::key::F12:
+        std::cout << "Loading prediction 2.\n";
+        load_xray(1);
+        break;
+
     case keyboard::key::One:
         selected_point = 1;
         std::cout << "Pixel selection for point " << selected_point << "\n";
