@@ -38,6 +38,7 @@ parser.add_argument('--predict', type=str, nargs='?', help='Predict cam args for
 parser.add_argument('--export_predictions', type=str, help='Export predicted coords as json (path to file).')
 parser.add_argument('--calibrate', type=str, help='Read sensor data for calibration from dicom file (path to file).')
 parser.add_argument('--crop', type=str, help='Crop images to top-left and bottom-right corners: tlx, tly, brx, bry / ... / ...')
+parser.add_argument('--canny', action=argparse.BooleanOptionalAction, default=False, help='Apply canny filter.')
 args = parser.parse_args()
 
 ## CT invariables -----------------------------------------------------
@@ -205,7 +206,7 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
     #iio.imwrite("canny.png", image_buff)
     #exit(0)
 
-    return image_buff
+    return image_buff[:, :, 0:3]
 
 def init_gl():
     renderlib.init_gl()
@@ -270,7 +271,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             mapped_camera = map_camera(true_camera, eye_dist_max, center_dist_max)
 
             y[i] = mapped_camera
-            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=True, canny_edges=True)
+            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=True, canny_edges=args.canny)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
@@ -336,7 +337,7 @@ def run_step(model, training_generator, validation_generator, step, epochs, lear
     model.compile(optimizer=optimizer, loss='mean_squared_error', loss_weights=loss_weights, metrics=['mean_squared_error'])
     model.summary()
     print("Learning rate: ", model.optimizer.learning_rate.numpy())
-    fit_history = model.fit(x=training_generator, validation_data=validation_generator, epochs=epochs, shuffle=False, use_multiprocessing=False, workers=1)
+    fit_history = model.fit(x=training_generator, validation_data=validation_generator, epochs=epochs, shuffle=False)
     plot_step(fit_history=fit_history, epochs=epochs, learning_rate=learning_rate, index=step)
     
 
@@ -353,19 +354,19 @@ if args.train is not None:
     run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
     
     step = 2
-    epochs = 150
+    epochs = 70
     learning_rate=1e-3
     print("train resnet layers...")
     model.get_layer(name='inception_resnet_v2').trainable=True
     run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
     
     step = 3
-    epochs = 150
+    epochs = 70
     learning_rate=1e-4
     run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
     
     step = 4
-    epochs = 150
+    epochs = 70
     learning_rate=1e-5
     run_step(model, training_generator, validation_generator, step, epochs, learning_rate)
 
@@ -394,8 +395,9 @@ if args.predict is not None:
         print("loaded image shape: ", image.shape)
 
         # Canny edge detection
-        image = cv.Canny(image, 50, 100)
-        image = np.repeat(image[..., np.newaxis], 3, -1)
+        if args.canny:
+            image = cv.Canny(image, 50, 100)
+            image = np.repeat(image[..., np.newaxis], 3, -1)
 
         # Crop
         if args.crop is not None:
