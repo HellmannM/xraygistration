@@ -539,7 +539,7 @@ size_t renderer::search_3d2d()
         query_points.push_back(match_result.query_keypoints[good_matches[i].queryIdx].pt);
     }
 
-    // distance estimation: assume (tnear+tfar)/2 for now
+    // reprojection / depth estimation
     std::vector<cv::Point3f> query_coords;
     auto camera = cam;
     const auto viewport = camera.get_viewport();
@@ -547,8 +547,9 @@ size_t renderer::search_3d2d()
     for (auto& p : query_points)
     {
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
-        auto hr = intersect(r, bbox);
-        auto coord = r.ori + r.dir * (hr.tnear + hr.tfar) / 2.f;
+        vec3f coord{0.f};
+        auto contribution = estimate_depth(volume_ref, bbox, value_range, r, delta, integration_coefficient, coord);
+        if (contribution < 0.8f) std::cout << p << ": contribution only " << contribution * 100.f << "%\n";
 //#define INV_Y
 #define INV_Z
 #ifdef INV_Y

@@ -72,26 +72,36 @@ using host_sched_t = tiled_sched<R>;
 #endif
 
 void render_cpp(
-        volume_ref_t const&             volume,
-        aabb                            bbox,
-        vec2f                           value_range,
-        host_device_rt&                 rt,
-        host_sched_t<ray_type_cpu>&     sched,
-        camera_t const&                 cam,
-        float                           delta,
-        float                           integration_coefficient
+        volume_ref_t const&         volume,
+        aabb                        bbox,
+        vec2f                       value_range,
+        host_device_rt&             rt,
+        host_sched_t<ray_type_cpu>& sched,
+        camera_t const&             cam,
+        float                       delta,
+        float                       integration_coefficient
+        );
+
+float estimate_depth(
+        volume_ref_t const& volume,
+        aabb                bbox,
+        vec2f               value_range,
+        basic_ray<float>    ray,
+        float               delta,
+        float               integration_coefficient,
+        vec3f&              point
         );
 
 #ifdef __CUDACC__
 void render_cu(
-        cuda_volume_ref_t const&        volume,
-        aabb                            bbox,
-        vec2f                           value_range,
-        host_device_rt&                 rt,
-        cuda_sched<ray_type_gpu>&       sched,
-        camera_t const&                 cam,
-        float                           delta,
-        float                           integration_coefficient
+        cuda_volume_ref_t const&    volume,
+        aabb                        bbox,
+        vec2f                       value_range,
+        host_device_rt&             rt,
+        cuda_sched<ray_type_gpu>&   sched,
+        camera_t const&             cam,
+        float                       delta,
+        float                       integration_coefficient
         );
 #endif
 

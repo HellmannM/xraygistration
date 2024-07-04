@@ -70,4 +70,86 @@ void render_cpp(
     }, sparams);
 }
 
+float estimate_depth(
+        volume_ref_t const& volume,
+        aabb                bbox,
+        vec2f               value_range,
+        basic_ray<float>    ray,
+        float               delta,
+        float               integration_coefficient,
+        vec3f&              point
+        )
+{
+    using R = ray_type_cpu;
+    using S = R::scalar_type;
+    using C = vector<4, S>;
+
+    // trace ray again and get sum
+    auto hit_rec = intersect(ray, bbox);
+    auto t = max(S(0.0), hit_rec.tnear);
+    //result.color = C(0.0);
+    float line_integral = 0.0f;
+    float max_value = 0.0f;
+    float t_max_value = 0.0f;
+    while ( any(t < hit_rec.tfar) )
+    {
+        auto pos = ray.ori + ray.dir * t;
+        auto tex_coord = vector<3, S>(
+                ( pos.x + (bbox.size().x / 2) ) / bbox.size().x,
+                (-pos.y + (bbox.size().y / 2) ) / bbox.size().y,
+                (-pos.z + (bbox.size().z / 2) ) / bbox.size().z
+                );
+        // sample volume
+        auto voxel = tex3D(volume, tex_coord);
+        // clamp
+        voxel = voxel < value_range.x ? value_range.x : voxel;
+        //voxel = voxel > value_range.y ? value_range.y : voxel;
+        auto contribution = select(
+                t < hit_rec.tfar,
+                voxel - value_range.x,
+                0.f);
+        if (contribution > max_value)
+        {
+            max_value = contribution;
+            t_max_value = t;
+        }
+        line_integral += contribution;
+        // step on
+        t += delta;
+    }
+    //result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+    point = ray.ori + ray.dir * t_max_value;
+
+    // add up epsilon around t_max and compare with line_integral.
+    const auto bbox_dist = hit_rec.tfar - hit_rec.tnear;
+    const auto search_dist = 0.05f * bbox_dist;
+    const float start = t_max_value - search_dist / 2.f;
+    const float end   = t_max_value + search_dist / 2.f;
+    t = start;
+    float sub_line_integral = 0.0f;
+    while ( any(t < end) )
+    {
+        auto pos = ray.ori + ray.dir * t;
+        auto tex_coord = vector<3, S>(
+                ( pos.x + (bbox.size().x / 2) ) / bbox.size().x,
+                (-pos.y + (bbox.size().y / 2) ) / bbox.size().y,
+                (-pos.z + (bbox.size().z / 2) ) / bbox.size().z
+                );
+        // sample volume
+        auto voxel = tex3D(volume, tex_coord);
+        // clamp
+        voxel = voxel < value_range.x ? value_range.x : voxel;
+        //voxel = voxel > value_range.y ? value_range.y : voxel;
+        sub_line_integral += select(
+                t < hit_rec.tfar,
+                voxel - value_range.x,
+                0.f);
+        // step on
+        t += delta;
+    }
+    
+    // return percentage of magnitude contribution
+    return sub_line_integral / line_integral;
+}
+
 } // visionaray
