@@ -527,13 +527,10 @@ size_t renderer::search_3d2d()
     std::vector<cv::Point2f> reference_points;
     std::vector<cv::Point2f> query_points;
     constexpr size_t num_points_for_solvepnp {min_good_matches};
-//    TODO why is ranges::views::take(n) not working?
-//    for (const auto& m : good_matches | std::ranges::views::take(num_points_for_solvepnp))
-//    {
-//        reference_points.push_back(match_result.reference_keypoints[m.trainIdx].pt);
-//        query_points.push_back(match_result.query_keypoints[m.queryIdx].pt);
-//    }
-    for (size_t i=0; i<std::min(num_points_for_solvepnp, good_matches.size()); ++i)
+    //TODO took only num_points_for_solvepnp best points. Do filtering after depth estimation?
+    //taking all for now
+    //for (size_t i=0; i<std::min(num_points_for_solvepnp, good_matches.size()); ++i)
+    for (size_t i=0; i<good_matches.size(); ++i)
     {
         reference_points.push_back(match_result.reference_keypoints[good_matches[i].trainIdx].pt);
         query_points.push_back(match_result.query_keypoints[good_matches[i].queryIdx].pt);
@@ -541,15 +538,17 @@ size_t renderer::search_3d2d()
 
     // reprojection / depth estimation
     std::vector<cv::Point3f> query_coords;
+    std::vector<cv::Point2f> reference_points_filtered;
     auto camera = cam;
     const auto viewport = camera.get_viewport();
     camera.begin_frame();
-    for (auto& p : query_points)
+    //for (auto& p : query_points)
+    for (size_t i=0; i<query_points.size(); ++i)
     {
+        auto& p = query_points[i];
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         vec3f coord{0.f};
         auto contribution = estimate_depth(volume_ref, bbox, value_range, r, delta, integration_coefficient, coord);
-        if (contribution < 0.8f) std::cout << p << ": contribution only " << contribution * 100.f << "%\n";
 //#define INV_Y
 #define INV_Z
 #ifdef INV_Y
@@ -558,9 +557,28 @@ size_t renderer::search_3d2d()
 #ifdef INV_Z
         coord.z = -coord.z;
 #endif
-        query_coords.push_back({coord.x, coord.y, coord.z});
+        constexpr float min_contribution {0.5f};
+        if (contribution < min_contribution)
+        {
+            if (contribution < 0.f)
+                std::cout << p << ": ignoring due to high transparency.\n";
+            else
+                std::cout << p << ": contribution only " << contribution * 100.f << "%\n";
+        } else
+        {
+            std::cout << p << ": " << contribution * 100.f << "%\n";
+            query_coords.push_back({coord.x, coord.y, coord.z});
+            reference_points_filtered.push_back(reference_points[i]);
+        }
     }
     camera.end_frame();
+
+    if (query_coords.size() < num_points_for_solvepnp)
+    {
+        std::cerr << "ERROR: found only " << query_coords.size()
+                  << " suitable coords. Aborting...\n";
+        return query_coords.size();
+    }
 
     // camera calibration
     double fx = 0.5 * ((double)viewport.w - 1) / std::tan(0.5 * camera.fovy() * camera.aspect()); // fx=444.661
@@ -584,7 +602,7 @@ size_t renderer::search_3d2d()
 #if 1
     cv::solvePnP(
             query_coords,
-            reference_points,
+            reference_points_filtered,
             camera_matrix,
             std::vector<double>(), // distCoeffs
             rotation,
@@ -599,7 +617,7 @@ size_t renderer::search_3d2d()
 #else
     cv::solvePnPRansac(
             query_coords,
-            reference_points,
+            reference_points_filtered,
             camera_matrix,
             std::vector<double>(), // distCoeffs
             rotation,

@@ -85,9 +85,10 @@ float estimate_depth(
     using C = vector<4, S>;
 
     // trace ray again and get sum
+    result_record<S> result;
+    result.color = C(0.0);
     auto hit_rec = intersect(ray, bbox);
     auto t = max(S(0.0), hit_rec.tnear);
-    //result.color = C(0.0);
     float line_integral = 0.0f;
     float max_value = 0.0f;
     float t_max_value = 0.0f;
@@ -117,12 +118,16 @@ float estimate_depth(
         // step on
         t += delta;
     }
-    //result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+    result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+    // reject if not high density pixel
+    if (result.color > C(0.5f))
+        return -1.f;
+
     point = ray.ori + ray.dir * t_max_value;
 
     // add up epsilon around t_max and compare with line_integral.
     const auto bbox_dist = hit_rec.tfar - hit_rec.tnear;
-    const auto search_dist = 0.05f * bbox_dist;
+    const auto search_dist = 0.1f * bbox_dist;
     const float start = t_max_value - search_dist / 2.f;
     const float end   = t_max_value + search_dist / 2.f;
     t = start;
