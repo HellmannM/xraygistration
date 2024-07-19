@@ -127,7 +127,8 @@ float estimate_depth(
 
     // add up epsilon around t_max and compare with line_integral.
     const auto bbox_dist = hit_rec.tfar - hit_rec.tnear;
-    const auto search_dist = 0.1f * bbox_dist;
+    //TODO make search_dist a constant distance in the volume instead of relative to bbox intersectionts
+    const auto search_dist = 0.2f * bbox_dist;
     const float start = t_max_value - search_dist / 2.f;
     const float end   = t_max_value + search_dist / 2.f;
     t = start;
