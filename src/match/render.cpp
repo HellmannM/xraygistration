@@ -1,5 +1,6 @@
 // This file is distributed under the MIT license.
 // See the LICENSE file for details.
+#include <iostream>
 
 #include "render.h"
 
@@ -9,7 +10,6 @@ namespace visionaray
 void render_cpp(
         volume_ref_t const&             volume,
         aabb                            bbox,
-        vec2f                           value_range,
         host_device_rt&                 rt,
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
@@ -30,7 +30,7 @@ void render_cpp(
     {
         result_record<S> result;
 
-        //bool debug = (x == 256) && (y == 256);
+        bool debug = (x == 256) && (y == 256);
         //bool crosshair = (x == 256) || (y == 256);
         //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 
@@ -51,19 +51,21 @@ void render_cpp(
 
             // sample volume
             auto voxel = tex3D(volume, tex_coord);
-            // clamp
-            voxel = voxel < value_range.x ? value_range.x : voxel;
-            //voxel = voxel > value_range.y ? value_range.y : voxel;
             line_integral += select(
                     t < hit_rec.tfar,
-                    voxel - value_range.x,
+                    voxel,
                     0.f);
 
             // step on
             t += delta;
         }
 
-        result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+        constexpr float photon_energy = 13000.0;
+        //TODO need traveled distance in cm
+        float traveled_distance_cm = 0.01;
+        float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
+        //TODO inverse rescale photon_energy_remaining with photon_energy
+        result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;
@@ -73,7 +75,6 @@ void render_cpp(
 float estimate_depth(
         volume_ref_t const& volume,
         aabb                bbox,
-        vec2f               value_range,
         basic_ray<float>    ray,
         float               delta,
         float               integration_coefficient,
@@ -102,12 +103,9 @@ float estimate_depth(
                 );
         // sample volume
         auto voxel = tex3D(volume, tex_coord);
-        // clamp
-        voxel = voxel < value_range.x ? value_range.x : voxel;
-        //voxel = voxel > value_range.y ? value_range.y : voxel;
         auto contribution = select(
                 t < hit_rec.tfar,
-                voxel - value_range.x,
+                voxel,
                 0.f);
         if (contribution > max_value)
         {
@@ -118,9 +116,14 @@ float estimate_depth(
         // step on
         t += delta;
     }
-    result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+    constexpr float photon_energy = 13000.0;
+    //TODO need traveled distance in cm
+    float traveled_distance_cm = 0.01;
+    float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
+    //TODO inverse rescale photon_energy_remaining with photon_energy
+    result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
     // reject if not high density pixel
-    if (result.color > C(0.5f))
+    if (result.color < C(0.5f))
         return -1.f;
 
     point = ray.ori + ray.dir * t_max_value;
@@ -143,12 +146,9 @@ float estimate_depth(
                 );
         // sample volume
         auto voxel = tex3D(volume, tex_coord);
-        // clamp
-        voxel = voxel < value_range.x ? value_range.x : voxel;
-        //voxel = voxel > value_range.y ? value_range.y : voxel;
         sub_line_integral += select(
                 t < hit_rec.tfar,
-                voxel - value_range.x,
+                voxel,
                 0.f);
         // step on
         t += delta;

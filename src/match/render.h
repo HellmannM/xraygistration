@@ -50,8 +50,8 @@ using ray_type_gpu              = basic_ray<scalar_type_gpu>;
 
 using camera_t = pinhole_camera;
 //using volume_value_t = unorm<16>;
-using volume_value_t = int16_t;
-//using volume_value_t = float;
+//using volume_value_t = int16_t;
+using volume_value_t = float;
 using volume_t = texture<volume_value_t, 3>;
 using transfunc_t = texture<vector<4, float>, 1>;
 using volume_ref_t = volume_t::ref_type;
@@ -74,7 +74,6 @@ using host_sched_t = tiled_sched<R>;
 void render_cpp(
         volume_ref_t const&         volume,
         aabb                        bbox,
-        vec2f                       value_range,
         host_device_rt&             rt,
         host_sched_t<ray_type_cpu>& sched,
         camera_t const&             cam,
@@ -85,7 +84,6 @@ void render_cpp(
 float estimate_depth(
         volume_ref_t const& volume,
         aabb                bbox,
-        vec2f               value_range,
         basic_ray<float>    ray,
         float               delta,
         float               integration_coefficient,
@@ -96,7 +94,6 @@ float estimate_depth(
 void render_cu(
         cuda_volume_ref_t const&    volume,
         aabb                        bbox,
-        vec2f                       value_range,
         host_device_rt&             rt,
         cuda_sched<ray_type_gpu>&   sched,
         camera_t const&             cam,

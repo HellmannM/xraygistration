@@ -56,6 +56,7 @@
 // JSON includes
 #include <nlohmann/json.hpp>
 
+#include "attenuation.h"
 #include "feature_matcher.h"
 #include "host_device_rt.h"
 #include "match_result.h"
@@ -186,7 +187,6 @@ struct renderer : viewer_type
     float                       delta;
     float                       integration_coefficient;
     vec3                        bgcolor;
-    vec2f                       value_range;
     // matcher
     feature_matcher<detector_type::SURF, descriptor_type::SIFT, matcher_type::BFMatcher> matcher;
     // pixel select
@@ -239,7 +239,6 @@ void renderer::on_display(bool display)
         render_cpp(
                 volume_ref,
                 bbox,
-                value_range,
                 rt,
                 host_sched,
                 cam,
@@ -253,7 +252,6 @@ void renderer::on_display(bool display)
         render_cu(
                 device_volume_ref,
                 bbox,
-                value_range,
                 rt,
                 device_sched,
                 cam,
@@ -548,7 +546,7 @@ size_t renderer::search_3d2d()
         auto& p = query_points[i];
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         vec3f coord{0.f};
-        auto contribution = estimate_depth(volume_ref, bbox, value_range, r, delta, integration_coefficient, coord);
+        auto contribution = estimate_depth(volume_ref, bbox, r, delta, integration_coefficient, coord);
 //#define INV_Y
 #define INV_Z
 #ifdef INV_Y
@@ -1079,15 +1077,7 @@ void renderer::load_volume()
         exit(1);
     }
     else vd->printInfoLine();
-//    virvo::TextureUtil tu(vd);
     assert(vd->getChan() == 1); // only support single channel data
-//    virvo::TextureUtil::Pointer tex_data = nullptr;
-//    virvo::TextureUtil::Channels channelbits = 1ULL;
-//    tex_data = tu.getTexture(virvo::vec3i(0),
-//            virvo::vec3i(vd->vox),
-//            texture_format,
-//            channelbits,
-//            0 /*frame*/ );
 //    //DEBUG CLAMPING
 //    for (size_t x=0; x<vd->vox[0]; ++x)
 //    {
@@ -1103,11 +1093,25 @@ void renderer::load_volume()
 //            }
 //        }
 //    }
+    // transform from ct density to linear attenuation coefficient
+    std::vector<float> attenuation_volume(vd->vox[0] * vd->vox[1] * vd->vox[2]);
+    auto attenuation_volume_ref = std::make_shared<std::vector<float>>(attenuation_volume);
+    for (size_t x=0; x<vd->vox[0]; ++x)
+    {
+        for (size_t y=0; y<vd->vox[1]; ++y)
+        {
+            for (size_t z=0; z<vd->vox[2]; ++z)
+            {
+                const auto index = x + y * vd->vox[0] + z * vd->vox[0] * vd->vox[1];
+                attenuation_volume[index] = attenuation_lookup(reinterpret_cast<int16_t*>(vd->getRaw(0))[index]);
+            }
+        }
+    }
+
     // update vol
     volume = volume_t(vd->vox[0], vd->vox[1], vd->vox[2]);
-    //volume.reset(reinterpret_cast<volume_ref_t::value_type const*>(tex_data));
-    volume.reset(reinterpret_cast<volume_value_t const*>(vd->getRaw(0)));
-//    volume.reset(reinterpret_cast<volume_value_t const*>(tex_data));
+    //volume.reset(reinterpret_cast<volume_value_t const*>(vd->getRaw(0)));
+    volume.reset(attenuation_volume.data());
     volume_ref = volume_ref_t(volume);
     volume_ref.set_filter_mode(Nearest);
     volume_ref.set_address_mode(Clamp);
@@ -1136,10 +1140,8 @@ void renderer::load_volume()
     delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
     std::cout << "Using delta=" << delta << "\n";
 
-    value_range = vec2f(vd->range(0).x, vd->range(0).y);
+    auto value_range = vec2f(vd->range(0).x, vd->range(0).y);
     std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
-    value_range = vec2f(-900, vd->range(0).y);
-    std::cout << "Clamping to:         min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
 std::vector<vector<4, unorm<8>>> renderer::get_current_image()

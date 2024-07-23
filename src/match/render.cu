@@ -9,7 +9,6 @@ namespace visionaray
 void render_cu(
         cuda_volume_ref_t const&        volume,
         aabb                            bbox,
-        vec2f                           value_range,
         host_device_rt&                 rt,
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
@@ -51,19 +50,21 @@ void render_cu(
 
             // sample volume
             auto voxel = tex3D(volume, tex_coord);
-            // clamp
-            voxel = voxel < value_range.x ? value_range.x : voxel;
-            //voxel = voxel > value_range.y ? value_range.y : voxel;
             line_integral += select(
                     t < hit_rec.tfar,
-                    voxel - value_range.x,
+                    voxel,
                     0.f);
 
             // step on
             t += delta;
         }
 
-        result.color = 1.f - C(clamp(line_integral * delta * integration_coefficient, 0.f, 1.f));
+        constexpr float photon_energy = 13000.0;
+        //TODO need traveled distance in cm
+        float traveled_distance_cm = 0.01;
+        float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
+        //TODO inverse rescale photon_energy_remaining with photon_energy
+        result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
 
         result.hit = hit_rec.hit;
         return result;
