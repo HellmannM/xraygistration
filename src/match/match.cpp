@@ -196,6 +196,7 @@ struct renderer : viewer_type
     ray_type_cpu                saved_rays[4];
     prediction_container        predictions;
 
+    void print_hotkeys();
     void load_volume();
     void load_xray(const std::string& filename);
     void load_xray(int idx);
@@ -221,7 +222,6 @@ protected:
     void on_key_press(visionaray::key_event const& event);
 
 };
-
 
 //-------------------------------------------------------------------------------------------------
 // Display function, implements the volume rendering algorithm
@@ -1226,12 +1226,41 @@ std::pair<vec3, vec3> renderer::find_closest_points(ray_type_cpu r1, ray_type_cp
     return std::make_pair(p1, p2);
 }
 
+void renderer::print_hotkeys()
+{
+    std::vector<std::pair<std::string, std::string>> hotkeys = {
+        {"c", "Toggle color space"},
+        {"l", "Print current camera"},
+        {"m", "Change render device (CPU/GPU)"},
+        {"p", "Save screenshot"},
+        {"r", "Save current image as reference image for matcher"},
+        {"s", "Search"},
+        {"t", "Match once"},
+        {"+/-", "Change X-ray tube potential"},
+        {"F1, [F2]", "Save current camera for image 1 [2]"},
+        {"Shift+F1, [Shift+F2]", "Jump to saved camera for image 1 [2]"},
+        {"Ctrl+F1 or F11, [Ctrl+F2 or F12]", "Jump to loaded prediction for image 1 [2]"},
+        {"F3", "Calculate object positions for marked pixels"},
+        {"1, [2]", "Pixel selection for image 1"},
+        {"3, [4]", "Pixel selection for image 2"},
+        {"Arrow keys", "Move pixel selector by 1 pixel"},
+        {"Shift + Arrow keys", "Move pixel selector by 10 pixels"},
+        {"Enter", "Calculate ray for selected pixel (Do this after moving a pixel selector!)"}
+    };
+
+    std::cout << "\nList of hotkeys:\n";
+    for (auto& [key, description] : hotkeys)
+        std::cout << key << std::string(34 - key.size(), ' ') << "-\t" << description << "\n";
+    std::cout << "\n\n";
+}
+
 //-------------------------------------------------------------------------------------------------
 // Main function, performs initialization
 //
 int main(int argc, char** argv)
 {
     renderer rend;
+    rend.print_hotkeys();
 
     try
     {
