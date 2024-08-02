@@ -6,13 +6,18 @@
 - [ ] Check License for SURF
 - [ ] Fix cuda::ORB constructor in template specialization
 - [ ] Move renderer to own header
-- [ ] Better depth estimation / back projection
+- [x] Better depth estimation / back projection
       maybe copy from "A CNN Regression Approach for Real-Time 2D 3D Registration"
+- [ ] use LAC LUTs for reprojection/depth estimation?
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
+- [ ] respect voxel dims
+- [ ] calc traveled distance
+- [ ] variable tube potential
+- [ ] add scatter mask + noise
 ### Search:
-- [ ] current approach:
+- [x] current approach:
     * generate image with current cam
     * match with input image
     * update camera
@@ -26,4 +31,4 @@
 
 
 # DNNMATCH
-- [ ] research normalized flow / flow matching
+- [x] research normalized flow / flow matching
