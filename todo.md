@@ -16,6 +16,7 @@
 - [ ] calc traveled distance
 - [ ] variable tube potential
 - [ ] add scatter mask + noise
+- [ ] use different nifti loader? maybe ITK
 ### Search:
 - [x] current approach:
     * generate image with current cam
