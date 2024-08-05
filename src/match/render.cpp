@@ -30,7 +30,7 @@ void render_cpp(
     {
         result_record<S> result;
 
-        bool debug = (x == 256) && (y == 256);
+        //bool debug = (x == 256) && (y == 256);
         //bool crosshair = (x == 256) || (y == 256);
         //if (crosshair) {result.color = C(1.f, 1.f, 1.f, 1.f); result.hit = true; return result;}
 

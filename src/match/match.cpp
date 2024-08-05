@@ -47,11 +47,11 @@
 #include <common/manip/zoom_manipulator.h>
 #include <common/viewer_glut.h>
 
-// Deskvox includes
-#undef MATH_NAMESPACE
-#include <virvo/vvfileio.h>
-#include <virvo/vvpixelformat.h>
-#include <virvo/vvtextureutil.h>
+//// Deskvox includes
+//#undef MATH_NAMESPACE
+//#include <virvo/vvfileio.h>
+//#include <virvo/vvpixelformat.h>
+//#include <virvo/vvtextureutil.h>
 
 // JSON includes
 #include <nlohmann/json.hpp>
@@ -63,6 +63,7 @@
 #include "prediction.h"
 #include "render.h"
 #include "timer.h"
+#include "volume_reader.h"
 
 using namespace visionaray;
 using viewer_type   = viewer_glut;
@@ -94,7 +95,6 @@ struct renderer : viewer_type
         , volume_filename()
         , json_filename()
         , xray_filenames()
-        , texture_format(virvo::PF_R16I)
         , delta(0.01f)
         , integration_coefficient(0.0000034f)
         , bgcolor({1.f, 1.f, 1.f})
@@ -182,8 +182,6 @@ struct renderer : viewer_type
     std::string                 volume_filename;
     std::string                 json_filename;
     std::vector<std::string>    xray_filenames;
-    vvVolDesc*                  vd;
-    virvo::PixelFormat          texture_format;
     float                       delta;
     float                       integration_coefficient;
     vec3                        bgcolor;
@@ -1066,50 +1064,33 @@ void renderer::on_key_press(key_event const& event)
 void renderer::load_volume()
 {
     std::cout << "Loading volume file: " << volume_filename << "\n";
-    vd = new vvVolDesc(volume_filename.c_str());
-    vvFileIO fio;
-    const auto err = fio.loadVolumeData(vd);
-    if (err != vvFileIO::OK)
-    {
-        std::cerr << "Error loading volume: " << err << std::endl;
-        delete vd;
-        vd = NULL;
-        exit(1);
-    }
-    else vd->printInfoLine();
-    assert(vd->getChan() == 1); // only support single channel data
-//    //DEBUG CLAMPING
-//    for (size_t x=0; x<vd->vox[0]; ++x)
-//    {
-//        for (size_t y=0; y<vd->vox[1]; ++y)
-//        {
-//            for (size_t z=0; z<vd->vox[2]; ++z)
-//            {
-//                if ((2*(vd->vox[1] - y) + z) > (2*vd->vox[1] + vd->vox[2]) / 1.75f)
-//                {
-//                    const auto index = x + y * vd->vox[0] + z * vd->vox[0] * vd->vox[1];
-//                    reinterpret_cast<volume_value_t*>(vd->getRaw(0))[index] = -4000;
-//                }
-//            }
-//        }
-//    }
+    auto nr = volume_reader(volume_filename);
+    vec3f voxel_spacing{nr.voxel_size(0), nr.voxel_size(1), nr.voxel_size(2)};
+    vec3i dimensions{nr.dimensions(0), nr.dimensions(1), nr.dimensions(2)};
+    vec3f size{nr.size(0), nr.size(1), nr.size(2)};
+    vec3f origin{nr.origin(0), nr.origin(1), nr.origin(2)};
+
+    std::cout << "voxel spacing: [" << voxel_spacing.x << ", " << voxel_spacing.y << ", " << voxel_spacing.z << "]\n";
+    std::cout << "volume dims: [" << dimensions.x << ", " << dimensions.y << ", " << dimensions.z << "]\n";
+    std::cout << "volume size: [" << size.x << ", " << size.y << ", " << size.z << "]\n";
+
     // transform from ct density to linear attenuation coefficient
-    std::vector<float> attenuation_volume(vd->vox[0] * vd->vox[1] * vd->vox[2]);
+    std::vector<float> attenuation_volume(dimensions.x * dimensions.y * dimensions.z);
     auto attenuation_volume_ref = std::make_shared<std::vector<float>>(attenuation_volume);
-    for (size_t x=0; x<vd->vox[0]; ++x)
+    for (size_t x=0; x<dimensions.x; ++x)
     {
-        for (size_t y=0; y<vd->vox[1]; ++y)
+        for (size_t y=0; y<dimensions.y; ++y)
         {
-            for (size_t z=0; z<vd->vox[2]; ++z)
+            for (size_t z=0; z<dimensions.z; ++z)
             {
-                const auto index = x + y * vd->vox[0] + z * vd->vox[0] * vd->vox[1];
-                attenuation_volume[index] = attenuation_lookup(reinterpret_cast<int16_t*>(vd->getRaw(0))[index]);
+                const auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
+                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z));
             }
         }
     }
 
     // update vol
-    volume = volume_t(vd->vox[0], vd->vox[1], vd->vox[2]);
+    volume = volume_t(dimensions.x, dimensions.y, dimensions.z);
     //volume.reset(reinterpret_cast<volume_value_t const*>(vd->getRaw(0)));
     volume.reset(attenuation_volume.data());
     volume_ref = volume_ref_t(volume);
@@ -1123,25 +1104,26 @@ void renderer::load_volume()
     device_volume_ref = cuda_volume_ref_t(device_volume);
 #endif
 
-    bbox = aabb(vec3(vd->getBoundingBox().min.data()), vec3(vd->getBoundingBox().max.data()));
+    vec3 size2 = size * 0.5f;
+    bbox = aabb(origin - size2, origin + size2);
 
     // determine ray integration step size (aka delta)
     int axis = 0;
-    if (vd->getSize()[1] / vd->vox[1] < vd->getSize()[axis] / vd->vox[axis])
+    if (size[1] / dimensions[1] < size[axis] / dimensions[axis])
     {
         axis = 1;
     }
-    if (vd->getSize()[2] / vd->vox[2] < vd->getSize()[axis] / vd->vox[axis])
+    if (size[2] / dimensions[2] < size[axis] / dimensions[axis])
     {
         axis = 2;
     }
     //TODO expose quality variable
     int quality = 1.0f;
-    delta = (vd->getSize()[axis] / vd->vox[axis]) / quality;
+    delta = (size[axis] / dimensions[axis]) / quality;
     std::cout << "Using delta=" << delta << "\n";
 
-    auto value_range = vec2f(vd->range(0).x, vd->range(0).y);
-    std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
+//    auto value_range = vec2f(vd->range(0).x, vd->range(0).y);
+//    std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
 std::vector<vector<4, unorm<8>>> renderer::get_current_image()

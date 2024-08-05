@@ -10,15 +10,16 @@ find_package(GLEW REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Nifti REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(ITK CONFIG REQUIRED)
+
+include(${ITK_USE_FILE})
 
 visionaray_use_package(Boost)
 visionaray_use_package(GLEW)
 visionaray_use_package(GLUT)
 visionaray_use_package(OpenGL)
 visionaray_use_package(Threads)
-visionaray_use_package(Nifti)
 visionaray_use_package(OpenCV)
 
 # CUDA
@@ -39,9 +40,7 @@ endif()
 
 visionaray_link_libraries(visionaray)
 visionaray_link_libraries(visionaray_common)
-visionaray_link_libraries(virvo_fileio)
-visionaray_link_libraries(virvo_transfunc)
-visionaray_link_libraries(virvo)
+visionaray_link_libraries(${ITK_LIBRARIES})
 visionaray_link_libraries(${OpenCV_LIBS})
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
@@ -50,7 +49,7 @@ include_directories(${VISIONARAY_COMMON_DIR})
 include_directories(${VISIONARAY_SRC_DIR})
 include_directories(${__VSNRAY_CONFIG_DIR})
 include_directories(${CMD_LINE_INCLUDE_DIR})
-include_directories(${DESKVOX_INCLUDE_DIR})
+include_directories(${ITK_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
 
@@ -63,11 +62,14 @@ set(MATCH_HEADERS
     feature_matcher.h
     render.h
     timer.h
+    volume_reader.h
+    attenuation.h
 )
 
 set(MATCH_SOURCES
     host_device_rt.cpp
     render.cpp
+    volume_reader.cpp
 )
 
 if(CUDA_FOUND AND VSNRAY_ENABLE_CUDA)
@@ -89,7 +91,7 @@ endif()
 link_directories(
     ${VISIONARAY_BUILD_DIR}/src/visionaray
     ${VISIONARAY_BUILD_DIR}/src/common
-    ${DESKVOX_BIN_DIR}
+    ${ITK_BIN_DIR}
 )
 
 visionaray_add_executable(match
@@ -103,3 +105,4 @@ visionaray_add_library(render SHARED
     ${MATCH_CUDA_SOURCES}
 )
 set_property(TARGET render PROPERTY POSITION_INDEPENDENT_CODE ON)
+

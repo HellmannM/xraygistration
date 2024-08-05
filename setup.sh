@@ -4,7 +4,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 pushd "${SCRIPT_DIR}"
 
 BUILD_VSNRAY=1
-BUILD_DESKVOX=1
+BUILD_DESKVOX=0
+BUILD_ITK=1
 
 NUM_CORES=24
 
@@ -43,6 +44,27 @@ if [ $BUILD_DESKVOX == "1" ]; then
         -DVISIONARAY_LIBRARY="$VISIONARAY_DIR/build/src/visionaray/libvisionaray.so"
     make clean
     make -j$NUM_CORES
+    popd 
+fi
+
+# 3rdparty/ITK
+if [ $BUILD_ITK == "1" ]; then
+    INSTALL_DIR="$PWD/3rdparty/ITK/install"
+    pushd 3rdparty/ITK
+    mkdir build
+    cd build
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-march=native" \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_STATIC_LIBS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_TESTING=OFF
+    make clean
+    make -j$NUM_CORES
+    make install -j$NUM_CORES
+    ln -s "ITK-6.0" "$INSTALL_DIR/include/ITK"
     popd 
 fi
 

@@ -15,3 +15,6 @@
 [submodule "3rdparty/CmdLine"]
 	path = 3rdparty/CmdLine
 	url = https://github.com/abolz/CmdLine.git
+[submodule "3rdparty/ITK"]
+	path = 3rdparty/ITK
+	url = https://github.com/InsightSoftwareConsortium/ITK
