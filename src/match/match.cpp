@@ -97,6 +97,7 @@ struct renderer : viewer_type
         , xray_filenames()
         , delta(0.01f)
         , photon_energy(13000.0f)
+        , tube_potential_ev(tube_potential::TB13000EV)
         , bgcolor({1.f, 1.f, 1.f})
         , matcher()
         , selected_point(0)
@@ -184,6 +185,7 @@ struct renderer : viewer_type
     std::vector<std::string>    xray_filenames;
     float                       delta;
     float                       photon_energy;
+    tube_potential              tube_potential_ev;
     vec3                        bgcolor;
     // matcher
     feature_matcher<detector_type::SURF, descriptor_type::SIFT, matcher_type::BFMatcher> matcher;
@@ -891,6 +893,26 @@ void renderer::on_key_press(key_event const& event)
         match();
         break;
 
+    case 'v':
+        std::cout << "Changing tube potential to: ";
+        switch (tube_potential_ev)
+        {
+        case tube_potential::TB13000EV:
+            tube_potential_ev = tube_potential::TB13500EV;
+            std::cout << "13500 eV\n";
+            break;
+        case tube_potential::TB13500EV:
+            tube_potential_ev = tube_potential::TB14000EV;
+            std::cout << "14000 eV\n";
+            break;
+        case tube_potential::TB14000EV:
+            tube_potential_ev = tube_potential::TB13000EV;
+            std::cout << "13000 eV\n";
+            break;
+        }
+        load_volume();
+        break;
+
     case '+':
         if (event.modifiers() == 0x00000004)
         {
@@ -1086,7 +1108,8 @@ void renderer::load_volume()
             for (size_t z=0; z<dimensions.z; ++z)
             {
                 const auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
-                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z), count_below_0, count_above_2516);
+                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z), tube_potential_ev,
+                                                                count_below_0, count_above_2516);
             }
         }
     }
@@ -1219,7 +1242,8 @@ void renderer::print_hotkeys()
         {"r", "Save current image as reference image for matcher"},
         {"s", "Search"},
         {"t", "Match once"},
-        {"+/-", "Change X-ray tube potential"},
+        {"v", "Change X-ray tube potential LAC LUT"},
+        {"+/-", "Change photon energy"},
         {"F1, [F2]", "Save current camera for image 1 [2]"},
         {"Shift+F1, [Shift+F2]", "Jump to saved camera for image 1 [2]"},
         {"Ctrl+F1 or F11, [Ctrl+F2 or F12]", "Jump to loaded prediction for image 1 [2]"},

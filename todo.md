@@ -8,13 +8,13 @@
 - [ ] Move renderer to own header
 - [x] Better depth estimation / back projection
       maybe copy from "A CNN Regression Approach for Real-Time 2D 3D Registration"
-- [ ] use LAC LUTs for reprojection/depth estimation?
+- [x] use LAC LUTs for reprojection/depth estimation
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
 - [ ] respect voxel dims
-- [ ] calc traveled distance
-- [ ] variable tube potential
+- [x] calc traveled distance
+- [x] variable tube potential
 - [ ] add scatter mask + noise
 - [x] use different nifti loader? maybe ITK
 ### Search:
