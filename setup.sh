@@ -57,8 +57,8 @@ if [ $BUILD_ITK == "1" ]; then
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_FLAGS="-march=native" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
-        -DBUILD_SHARED_LIBS=ON \
-        -DBUILD_STATIC_LIBS=OFF \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_STATIC_LIBS=ON \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_TESTING=OFF
     make clean
