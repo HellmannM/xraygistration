@@ -72,13 +72,21 @@ std::vector<lut_entry> LUT_14keV = {
 };
 
 
-float attenuation_lookup(int16_t density) {
-    if (density < 0) density = 0;
-    if (density > 2516) density = 2516;
-    auto pos = find_if(LUT_13keV.begin(), LUT_13keV.end(),
+float attenuation_lookup(ssize_t density, size_t& count_below_0, size_t& count_above_2516) {
+    if (density < 0)
+    {
+        ++count_below_0;
+        density = 0;
+    }
+    else if (density > 2516)
+    {
+        ++count_above_2516;
+        density = 2516;
+    }
+    const auto pos = find_if(LUT_13keV.begin(), LUT_13keV.end(),
             [density](lut_entry elem){return elem.density > density;}
             );
-    auto previous = pos - 1;
+    const auto previous = pos - 1;
     return previous->lac + (density - previous->density) / (pos->density - previous->density) * (pos->lac - previous->lac);
 }
 

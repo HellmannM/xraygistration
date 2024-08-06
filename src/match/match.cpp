@@ -1066,17 +1066,19 @@ void renderer::load_volume()
     std::cout << "Loading volume file: " << volume_filename << "\n";
     auto nr = volume_reader(volume_filename);
     vec3f voxel_spacing{nr.voxel_size(0), nr.voxel_size(1), nr.voxel_size(2)};
-    vec3i dimensions{nr.dimensions(0), nr.dimensions(1), nr.dimensions(2)};
+    vector<3, size_t> dimensions{nr.dimensions(0), nr.dimensions(1), nr.dimensions(2)};
     vec3f size{nr.size(0), nr.size(1), nr.size(2)};
     vec3f origin{nr.origin(0), nr.origin(1), nr.origin(2)};
 
     std::cout << "voxel spacing: [" << voxel_spacing.x << ", " << voxel_spacing.y << ", " << voxel_spacing.z << "]\n";
     std::cout << "volume dims: [" << dimensions.x << ", " << dimensions.y << ", " << dimensions.z << "]\n";
     std::cout << "volume size: [" << size.x << ", " << size.y << ", " << size.z << "]\n";
+    std::cout << "volume origin: [" << origin.x << ", " << origin.y << ", " << origin.z << "]\n";
 
     // transform from ct density to linear attenuation coefficient
     std::vector<float> attenuation_volume(dimensions.x * dimensions.y * dimensions.z);
     auto attenuation_volume_ref = std::make_shared<std::vector<float>>(attenuation_volume);
+    size_t count_below_0=0, count_above_2516=0;
     for (size_t x=0; x<dimensions.x; ++x)
     {
         for (size_t y=0; y<dimensions.y; ++y)
@@ -1084,10 +1086,12 @@ void renderer::load_volume()
             for (size_t z=0; z<dimensions.z; ++z)
             {
                 const auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
-                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z));
+                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z), count_below_0, count_above_2516);
             }
         }
     }
+    std::cout << "density < 0: " << count_below_0 << "\n";
+    std::cout << "density > 2516: " << count_above_2516 << "\n";
 
     // update vol
     volume = volume_t(dimensions.x, dimensions.y, dimensions.z);
@@ -1104,6 +1108,8 @@ void renderer::load_volume()
     device_volume_ref = cuda_volume_ref_t(device_volume);
 #endif
 
+    std::cout << "TODO: Setting volume origin to {0, 0, 0}.\n";
+    origin = {0.f, 0.f, 0.f};
     vec3 size2 = size * 0.5f;
     bbox = aabb(origin - size2, origin + size2);
 
@@ -1121,9 +1127,6 @@ void renderer::load_volume()
     int quality = 1.0f;
     delta = (size[axis] / dimensions[axis]) / quality;
     std::cout << "Using delta=" << delta << "\n";
-
-//    auto value_range = vec2f(vd->range(0).x, vd->range(0).y);
-//    std::cout << "Dataset value range: min=" << value_range.x << " max=" << value_range.y << "\n";
 }
 
 std::vector<vector<4, unorm<8>>> renderer::get_current_image()
