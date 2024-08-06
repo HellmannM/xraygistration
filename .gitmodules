@@ -3,11 +3,6 @@
     url = git@github.com:HellmannM/visionaray.git
     branch = match
 
-[submodule "deskvox"]
-	path = 3rdparty/deskvox
-    url = git@github.com:HellmannM/deskvox.git
-    branch = ct-rg-matcher
-
 [submodule "3rdparty/nlohmann_json"]
 	path = 3rdparty/nlohmann_json
 	url = git@github.com:nlohmann/json.git

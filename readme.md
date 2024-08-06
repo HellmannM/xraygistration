@@ -82,7 +82,7 @@ See [license file](license.md).
 
 ## Dependencies
 - [Visionaray](https://github.com/szellmann/visionaray)
-- [Deskvox](https://github.com/deskvox/deskvox)
+- [ITK](https://github.com/InsightSoftwareConsortium/ITK)
 - [CmdLine](https://github.com/abolz/CmdLine)
 - [nlohmann json](https://github.com/nlohmann/json)
 - [OpenCV](https://github.com/opencv/opencv)
