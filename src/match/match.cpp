@@ -96,7 +96,7 @@ struct renderer : viewer_type
         , json_filename()
         , xray_filenames()
         , delta(0.01f)
-        , integration_coefficient(0.0000034f)
+        , photon_energy(13000.0f)
         , bgcolor({1.f, 1.f, 1.f})
         , matcher()
         , selected_point(0)
@@ -183,7 +183,7 @@ struct renderer : viewer_type
     std::string                 json_filename;
     std::vector<std::string>    xray_filenames;
     float                       delta;
-    float                       integration_coefficient;
+    float                       photon_energy;
     vec3                        bgcolor;
     // matcher
     feature_matcher<detector_type::SURF, descriptor_type::SIFT, matcher_type::BFMatcher> matcher;
@@ -241,7 +241,7 @@ void renderer::on_display(bool display)
                 host_sched,
                 cam,
                 delta,
-                integration_coefficient
+                photon_energy
             );
     }
 #if VSNRAY_COMMON_HAVE_CUDA
@@ -254,7 +254,7 @@ void renderer::on_display(bool display)
                 device_sched,
                 cam,
                 delta,
-                integration_coefficient
+                photon_energy
             );
     }
 #endif
@@ -544,7 +544,7 @@ size_t renderer::search_3d2d()
         auto& p = query_points[i];
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         vec3f coord{0.f};
-        auto contribution = estimate_depth(volume_ref, bbox, r, delta, integration_coefficient, coord);
+        auto contribution = estimate_depth(volume_ref, bbox, r, delta, photon_energy, coord);
 //#define INV_Y
 #define INV_Z
 #ifdef INV_Y
@@ -898,8 +898,8 @@ void renderer::on_key_press(key_event const& event)
             std::cout << "FoV Y = " << cam.fovy() << "rad / " << constants::radians_to_degrees<float>() * cam.fovy() << "°\n";
         } else
         {
-            integration_coefficient += 0.0000001f;
-            std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+            photon_energy += 100.0f;
+            std::cout << "Photon energy = " << photon_energy << "\n";
         }
         break;
 
@@ -910,8 +910,8 @@ void renderer::on_key_press(key_event const& event)
             std::cout << "FoV Y = " << cam.fovy() << "rad / " << constants::radians_to_degrees<float>() * cam.fovy() << "°\n";
         } else
         {
-            integration_coefficient -= 0.0000001f;
-            std::cout << "Integration coefficient = " << integration_coefficient << "\n";
+            photon_energy -= 100.0f;
+            std::cout << "Photon energy = " << photon_energy << "\n";
         }
         break;
 
@@ -1123,9 +1123,7 @@ void renderer::load_volume()
     {
         axis = 2;
     }
-    //TODO expose quality variable
-    int quality = 1.0f;
-    delta = (size[axis] / dimensions[axis]) / quality;
+    delta = size[axis] / dimensions[axis];
     std::cout << "Using delta=" << delta << "\n";
 }
 
@@ -1330,13 +1328,13 @@ extern "C"
     void init_gl() { glewInit(); }
 
     void single_shot(
-            void* rend_ptr, void* img_buff, float int_coeff,
+            void* rend_ptr, void* img_buff, float photon_energy,
             float eye_x, float eye_y, float eye_z,
             float center_x, float center_y, float center_z,
             float up_x, float up_y, float up_z)
     {
         renderer* rend = reinterpret_cast<renderer*>(rend_ptr);
-        rend->integration_coefficient = int_coeff;
+        rend->photon_energy = photon_energy;
         vec3 eye(eye_x, eye_y, eye_z);
         vec3 center(center_x, center_y, center_z);
         vec3 up(up_x, up_y, up_z);

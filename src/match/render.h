@@ -78,7 +78,7 @@ void render_cpp(
         host_sched_t<ray_type_cpu>& sched,
         camera_t const&             cam,
         float                       delta,
-        float                       integration_coefficient
+        float                       photon_energy
         );
 
 float estimate_depth(
@@ -86,7 +86,7 @@ float estimate_depth(
         aabb                bbox,
         basic_ray<float>    ray,
         float               delta,
-        float               integration_coefficient,
+        float               photon_energy,
         vec3f&              point
         );
 
@@ -98,7 +98,7 @@ void render_cu(
         cuda_sched<ray_type_gpu>&   sched,
         camera_t const&             cam,
         float                       delta,
-        float                       integration_coefficient
+        float                       photon_energy
         );
 #endif
 

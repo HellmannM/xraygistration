@@ -14,7 +14,7 @@ void render_cpp(
         host_sched_t<ray_type_cpu>&     sched,
         camera_t const&                 cam,
         float                           delta,
-        float                           integration_coefficient
+        float                           photon_energy
         )
 {
     auto sparams = make_sched_params(
@@ -38,7 +38,8 @@ void render_cpp(
         auto t = max(S(0.0), hit_rec.tnear);
 
         result.color = C(0.0);
-        float line_integral = 0.0f;
+        S accumulated_LAC = 0.0;
+        size_t steps = 0;
 
         while ( any(t < hit_rec.tfar) )
         {
@@ -51,21 +52,20 @@ void render_cpp(
 
             // sample volume
             auto voxel = tex3D(volume, tex_coord);
-            line_integral += select(
+            accumulated_LAC += select(
                     t < hit_rec.tfar,
                     voxel,
                     0.f);
 
             // step on
             t += delta;
+            ++steps;
         }
 
-        constexpr float photon_energy = 13000.0;
-        //TODO need traveled distance in cm
-        float traveled_distance_cm = 0.01;
-        float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
-        //TODO inverse rescale photon_energy_remaining with photon_energy
-        result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
+        auto average_LAC = accumulated_LAC / steps;
+        auto traveled_distance_cm = (steps * delta) / S(10.0); // delta is in [mm]/[px]
+        auto fraction_remaining = pow(photon_energy, -traveled_distance_cm * average_LAC);
+        result.color = C(1.f) - C(fraction_remaining);
 
         result.hit = hit_rec.hit;
         return result;
@@ -77,7 +77,7 @@ float estimate_depth(
         aabb                bbox,
         basic_ray<float>    ray,
         float               delta,
-        float               integration_coefficient,
+        float               photon_energy,
         vec3f&              point
         )
 {
@@ -90,9 +90,10 @@ float estimate_depth(
     result.color = C(0.0);
     auto hit_rec = intersect(ray, bbox);
     auto t = max(S(0.0), hit_rec.tnear);
-    float line_integral = 0.0f;
-    float max_value = 0.0f;
-    float t_max_value = 0.0f;
+    S accumulated_LAC = 0.0f;
+    S max_value = 0.0f;
+    S t_max_value = 0.0f;
+    size_t steps = 0;
     while ( any(t < hit_rec.tfar) )
     {
         auto pos = ray.ori + ray.dir * t;
@@ -112,30 +113,30 @@ float estimate_depth(
             max_value = contribution;
             t_max_value = t;
         }
-        line_integral += contribution;
+        accumulated_LAC += contribution;
         // step on
         t += delta;
+        ++steps;
     }
-    constexpr float photon_energy = 13000.0;
-    //TODO need traveled distance in cm
-    float traveled_distance_cm = 0.01;
-    float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
-    //TODO inverse rescale photon_energy_remaining with photon_energy
-    result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
-    // reject if not high density pixel
+
+    auto average_LAC = accumulated_LAC / steps;
+    auto traveled_distance_cm = (steps * delta) / S(10.0); // delta is in [mm]/[px]
+    auto fraction_remaining = pow(photon_energy, -traveled_distance_cm * average_LAC);
+    result.color = C(1.f) - C(fraction_remaining);
+
+    // reject low attenuation pixels
     if (result.color < C(0.5f))
         return -1.f;
 
     point = ray.ori + ray.dir * t_max_value;
 
-    // add up epsilon around t_max and compare with line_integral.
-    const auto bbox_dist = hit_rec.tfar - hit_rec.tnear;
-    //TODO make search_dist a constant distance in the volume instead of relative to bbox intersectionts
-    const auto search_dist = 0.2f * bbox_dist;
-    const float start = t_max_value - search_dist / 2.f;
-    const float end   = t_max_value + search_dist / 2.f;
+    // compare with epsilon around t_max
+    const auto search_dist = 10; // [mm]
+    const float start = max(t_max_value - search_dist / 2.f, hit_rec.tnear);
+    const float end   = min(t_max_value + search_dist / 2.f, hit_rec.tfar);
     t = start;
-    float sub_line_integral = 0.0f;
+    float section_accumulated_LAC = 0.0f;
+    size_t section_steps = 0;
     while ( any(t < end) )
     {
         auto pos = ray.ori + ray.dir * t;
@@ -146,16 +147,20 @@ float estimate_depth(
                 );
         // sample volume
         auto voxel = tex3D(volume, tex_coord);
-        sub_line_integral += select(
+        section_accumulated_LAC += select(
                 t < hit_rec.tfar,
                 voxel,
                 0.f);
         // step on
         t += delta;
+        ++section_steps;
     }
+    auto section_average_LAC = section_accumulated_LAC / section_steps;
+    auto section_traveled_distance_cm = (section_steps * delta) / S(10.0); // delta is in [mm]/[px]
+    auto section_fraction_remaining = pow(photon_energy, -section_traveled_distance_cm * section_average_LAC);
     
     // return percentage of magnitude contribution
-    return sub_line_integral / line_integral;
+    return (1.f - section_fraction_remaining) / (1.f - fraction_remaining);
 }
 
 } // visionaray

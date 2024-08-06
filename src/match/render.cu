@@ -13,7 +13,7 @@ void render_cu(
         cuda_sched<ray_type_gpu>&       sched,
         camera_t const&                 cam,
         float                           delta,
-        float                           integration_coefficient
+        float                           photon_energy
         )
 {
     auto sparams = make_sched_params(
@@ -37,7 +37,8 @@ void render_cu(
         auto t = max(S(0.0), hit_rec.tnear);
 
         result.color = C(0.0);
-        float line_integral = 0.0f;
+        S accumulated_LAC = 0.0;
+        size_t steps = 0;
 
         while ( any(t < hit_rec.tfar) )
         {
@@ -50,21 +51,20 @@ void render_cu(
 
             // sample volume
             auto voxel = tex3D(volume, tex_coord);
-            line_integral += select(
+            accumulated_LAC += select(
                     t < hit_rec.tfar,
                     voxel,
                     0.f);
 
             // step on
             t += delta;
+            ++steps;
         }
 
-        constexpr float photon_energy = 13000.0;
-        //TODO need traveled distance in cm
-        float traveled_distance_cm = 0.01;
-        float photon_energy_remaining = pow(photon_energy, -traveled_distance_cm * line_integral);
-        //TODO inverse rescale photon_energy_remaining with photon_energy
-        result.color = C(1.f) - C(clamp(photon_energy_remaining, 0.f, 1.f));
+        auto average_LAC = accumulated_LAC / steps;
+        auto traveled_distance_cm = (steps * delta) / S(10.0); // delta is in [mm]/[px]
+        auto fraction_remaining = pow(photon_energy, -traveled_distance_cm * average_LAC);
+        result.color = C(1.f) - C(fraction_remaining);
 
         result.hit = hit_rec.hit;
         return result;

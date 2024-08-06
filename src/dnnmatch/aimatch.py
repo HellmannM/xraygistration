@@ -170,7 +170,7 @@ def restore_camera(camera, eye_dist_max, center_dist_max):
     up_c     = spherical_to_cartesian(up)
     return np.concatenate((eye_c, center_c, up_c))
 
-def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, random_integration_coefficient=False, canny_edges=True):
+def get_frame(camera, photon_energy=13000, random_vignette=False, randomize_photon_energy=False, canny_edges=True):
     image_buff = np.empty(shape=(renderer_height.value, renderer_width.value, renderer_bpp.value), dtype=np.uint8)
     image_buff_ptr = image_buff.ctypes.data_as(c.POINTER(c.c_uint8))
     eye_x =    (c.c_float)(camera[0])
@@ -183,10 +183,10 @@ def get_frame(camera, integration_coefficient=0.0000034, random_vignette=False, 
     up_y =     (c.c_float)(camera[7])
     up_z =     (c.c_float)(camera[8])
 
-    if random_integration_coefficient == True:
-        random_integration_coefficient *= np.random.uniform(0.6, 1.15);
-    int_coeff = (c.c_float)(integration_coefficient)
-    renderlib.single_shot(renderer, image_buff_ptr, int_coeff, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
+    if randomize_photon_energy == True:
+        photon_energy *= np.random.uniform(0.6, 1.15);
+    photon_energy_ = (c.c_float)(photon_energy)
+    renderlib.single_shot(renderer, image_buff_ptr, photon_energy_, eye_x, eye_y, eye_z, center_x, center_y, center_z, up_x, up_y, up_z)
 
     if canny_edges == True:
         edges = cv.Canny(image_buff[:, :, 0:3], 50, 100)
@@ -271,7 +271,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             mapped_camera = map_camera(true_camera, eye_dist_max, center_dist_max)
 
             y[i] = mapped_camera
-            X[i,] = get_frame(true_camera, random_vignette=False, random_integration_coefficient=True, canny_edges=args.canny)
+            X[i,] = get_frame(true_camera, random_vignette=False, randomize_photon_energy=True, canny_edges=args.canny)
             #import cv2 as cv
             #cv.namedWindow("Display Image", cv.WINDOW_AUTOSIZE);
             #cv.imshow("Display Image", X[i,]);
