@@ -2,6 +2,8 @@
 
 #include <string>
 
+using voxel_value_type = int16_t;
+
 class volume_reader
 {
     public:
@@ -16,9 +18,7 @@ class volume_reader
 
         float origin(size_t i) const;
 
-        std::string pixel_type_as_str() const;
-
-        int16_t value(int x, int y, int z);
+        voxel_value_type value(int x, int y, int z);
 
     private:
         struct impl;
