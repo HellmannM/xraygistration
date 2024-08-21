@@ -46,13 +46,6 @@ namespace matcher_type
 #endif
 }
 
-//typedef cv::ORB matcher_type_ORB;
-//typedef cv::SIFT matcher_type_SIFT;
-//typedef cv::xfeatures2d::SURF matcher_type_SURF;
-//#if VSNRAY_COMMON_HAVE_CUDA
-//typedef cv::cuda::ORB matcher_type_ORB_GPU;
-//#endif
-
 template <typename Detector, typename Descriptor, typename Matcher>
 struct feature_matcher
 {
