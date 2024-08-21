@@ -540,13 +540,16 @@ size_t renderer::search_3d2d()
     auto camera = cam;
     const auto viewport = camera.get_viewport();
     camera.begin_frame();
-    //for (auto& p : query_points)
+    size_t count_transparent {0};
+    size_t count_low_contrib {0};
+    size_t count_good {0};
     for (size_t i=0; i<query_points.size(); ++i)
     {
         auto& p = query_points[i];
         auto r = camera.primary_ray(ray_type_cpu(), p.x, p.y, (float)viewport.w, (float)viewport.h);
         vec3f coord{0.f};
-        auto contribution = estimate_depth(volume_ref, bbox, r, delta, photon_energy, coord);
+        constexpr auto contrib_epsilon_mm = 5.0f;
+        auto contribution = estimate_depth(volume_ref, bbox, r, delta, photon_energy, coord, contrib_epsilon_mm);
 //#define INV_Y
 #define INV_Z
 #ifdef INV_Y
@@ -555,21 +558,27 @@ size_t renderer::search_3d2d()
 #ifdef INV_Z
         coord.z = -coord.z;
 #endif
-        constexpr float min_contribution {0.5f};
+        constexpr float min_contribution {0.75f};
         if (contribution < min_contribution)
         {
             if (contribution < 0.f)
-                std::cout << p << ": ignoring due to high transparency.\n";
+                //std::cout << p << ": ignoring due to high transparency.\n";
+                ++count_transparent;
             else
-                std::cout << p << ": contribution only " << contribution * 100.f << "%\n";
+                //std::cout << p << ": contribution only " << contribution * 100.f << "%\n";
+                ++count_low_contrib;
         } else
         {
-            std::cout << p << ": " << contribution * 100.f << "%\n";
+            //std::cout << p << ": " << contribution * 100.f << "%\n";
+            ++count_good;
             query_coords.push_back({coord.x, coord.y, coord.z});
             reference_points_filtered.push_back(reference_points[i]);
         }
     }
     camera.end_frame();
+    std::cout << "skipped due to high transparency: " << count_transparent << "\n";
+    std::cout << "skipped due to low locality of contribution: " << count_low_contrib << "\n";
+    std::cout << "good : " << count_good << "\n\n";
 
     if (query_coords.size() < num_points_for_solvepnp)
     {

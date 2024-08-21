@@ -87,7 +87,8 @@ float estimate_depth(
         basic_ray<float>    ray,
         float               delta,
         float               photon_energy,
-        vec3f&              point
+        vec3f&              point,
+        float               contrib_epsilon_mm
         );
 
 #ifdef __CUDACC__

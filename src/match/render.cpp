@@ -78,7 +78,8 @@ float estimate_depth(
         basic_ray<float>    ray,
         float               delta,
         float               photon_energy,
-        vec3f&              point
+        vec3f&              point,
+        float               contrib_epsilon_mm
         )
 {
     using R = ray_type_cpu;
@@ -92,7 +93,7 @@ float estimate_depth(
     auto t = max(S(0.0), hit_rec.tnear);
     S accumulated_LAC = 0.0f;
     S max_value = 0.0f;
-    S t_max_value = 0.0f;
+    S t_at_max_value = 0.0f;
     size_t steps = 0;
     while ( any(t < hit_rec.tfar) )
     {
@@ -111,7 +112,7 @@ float estimate_depth(
         if (contribution > max_value)
         {
             max_value = contribution;
-            t_max_value = t;
+            t_at_max_value = t;
         }
         accumulated_LAC += contribution;
         // step on
@@ -128,12 +129,11 @@ float estimate_depth(
     if (result.color < C(0.5f))
         return -1.f;
 
-    point = ray.ori + ray.dir * t_max_value;
+    point = ray.ori + ray.dir * t_at_max_value;
 
-    // compare with epsilon around t_max
-    const auto search_dist = 10; // [mm]
-    const float start = max(t_max_value - search_dist / 2.f, hit_rec.tnear);
-    const float end   = min(t_max_value + search_dist / 2.f, hit_rec.tfar);
+    // compare with epsilon around t_at_max_value
+    const float start = max(t_at_max_value - contrib_epsilon_mm / 2.f, hit_rec.tnear);
+    const float end   = min(t_at_max_value + contrib_epsilon_mm / 2.f, hit_rec.tfar);
     t = start;
     float section_accumulated_LAC = 0.0f;
     size_t section_steps = 0;
