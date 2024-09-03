@@ -49,7 +49,7 @@ include_directories(${VISIONARAY_COMMON_DIR})
 include_directories(${VISIONARAY_SRC_DIR})
 include_directories(${__VSNRAY_CONFIG_DIR})
 include_directories(${CMD_LINE_INCLUDE_DIR})
-include_directories(${ITK_INCLUDE_DIR})
+include_directories(${ITK_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${NLOHMANN_JSON_INCLUDE_DIR})
 
@@ -91,7 +91,6 @@ endif()
 link_directories(
     ${VISIONARAY_BUILD_DIR}/src/visionaray
     ${VISIONARAY_BUILD_DIR}/src/common
-    ${ITK_BIN_DIR}
 )
 
 visionaray_add_executable(match
