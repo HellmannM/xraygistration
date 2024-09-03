@@ -11,14 +11,11 @@ class volume_reader
         ~volume_reader();
 
         float size(size_t i) const;
-
         float voxel_size(size_t i) const;
-
         size_t dimensions(size_t i) const;
-
         float origin(size_t i) const;
-
         voxel_value_type value(int x, int y, int z);
+        void copy(std::vector<voxel_value_type>& buffer);
 
     private:
         struct impl;

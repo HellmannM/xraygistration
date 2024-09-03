@@ -1,4 +1,5 @@
 #include <itkImageFileReader.h>
+#include "itkImageRegionIterator.h"
 
 #include <string>
 #include <vector>
@@ -56,3 +57,12 @@ voxel_value_type volume_reader::value(int x, int y, int z)
     return p_impl->img->GetPixel(index);
 }
 
+void volume_reader::copy(std::vector<voxel_value_type>& buffer)
+{
+    itk::ImageRegionConstIterator<img_t> inputIterator(p_impl->img, p_impl->img->GetLargestPossibleRegion());
+    while (!inputIterator.IsAtEnd())
+    {
+        buffer.push_back(inputIterator.Get());
+        ++inputIterator;
+    }
+}

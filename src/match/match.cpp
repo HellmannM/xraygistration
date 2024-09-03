@@ -1110,14 +1110,16 @@ void renderer::load_volume()
     std::vector<float> attenuation_volume(dimensions.x * dimensions.y * dimensions.z);
     auto attenuation_volume_ref = std::make_shared<std::vector<float>>(attenuation_volume);
     size_t count_below_0=0, count_above_2516=0;
+    std::vector<int16_t> buffer;
+    nr.copy(buffer);
     for (size_t x=0; x<dimensions.x; ++x)
     {
         for (size_t y=0; y<dimensions.y; ++y)
         {
             for (size_t z=0; z<dimensions.z; ++z)
             {
-                const auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
-                attenuation_volume[index] = attenuation_lookup(nr.value(x, y, z), tube_potential_ev,
+                auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
+                attenuation_volume[index] = attenuation_lookup(buffer[index], tube_potential_ev,
                                                                 count_below_0, count_above_2516);
             }
         }
