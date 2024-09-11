@@ -1112,17 +1112,9 @@ void renderer::load_volume()
     size_t count_below_0=0, count_above_2516=0;
     std::vector<int16_t> buffer;
     nr.copy(buffer);
-    for (size_t x=0; x<dimensions.x; ++x)
+    for (size_t i=0; i<buffer.size(); ++i)
     {
-        for (size_t y=0; y<dimensions.y; ++y)
-        {
-            for (size_t z=0; z<dimensions.z; ++z)
-            {
-                auto index = x + y * dimensions.x + z * dimensions.x * dimensions.y;
-                attenuation_volume[index] = attenuation_lookup(buffer[index], tube_potential_ev,
-                                                                count_below_0, count_above_2516);
-            }
-        }
+        attenuation_volume[i] = attenuation_lookup(buffer[i], tube_potential_ev, count_below_0, count_above_2516);
     }
     std::cout << "density < 0: " << count_below_0 << "\n";
     std::cout << "density > 2516: " << count_above_2516 << "\n";
