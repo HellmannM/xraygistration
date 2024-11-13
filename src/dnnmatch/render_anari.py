@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 import os as os
-#import cProfile
 
 # Load Nifti
 parser = argparse.ArgumentParser(description='Render nifti file.')
@@ -21,7 +20,7 @@ if not os.path.isfile(inputfile):
 img = nib.load(inputfile)
 data = img.get_fdata()
 print("Shape: ", data.shape)
-data = data.astype(np.int32) # int16 should be enough but doesn't work for some reason...
+data = data.astype(np.float32)
 data = np.asarray(data)
 
 print("Transform to LAC...")

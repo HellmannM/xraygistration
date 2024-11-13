@@ -1,3 +1,4 @@
+import ctypes
 from enum import IntEnum
 import numpy as np
 import multiprocessing
@@ -80,56 +81,74 @@ def attenuation_lookup(density, tb=TUBE_POTENTIAL.TB13000EV):
 
     index = 0
     length = len(LAC_LUT[tb,:,:])
-    while (index < length) and (LAC_LUT[tb, index, 0] <= density):
+    while (index < length) and (LAC_LUT[tb, index, 0] < density):
         index += 1
 
     return np.float32(                                              \
-            LAC_LUT[tb, index-2, 1]                                 \
-            + (density - LAC_LUT[tb, index-2, 0])                   \
-            / (LAC_LUT[tb, index-1, 0] - LAC_LUT[tb, index-2, 0])   \
-            * (LAC_LUT[tb, index-1, 1] - LAC_LUT[tb, index-2, 1])   \
+            LAC_LUT[tb, index-1, 1]                                 \
+            + (density - LAC_LUT[tb, index-1, 0])                   \
+            / (LAC_LUT[tb, index, 0] - LAC_LUT[tb, index-1, 0])     \
+            * (LAC_LUT[tb, index, 1] - LAC_LUT[tb, index-1, 1])     \
            )
 
-def transform_to_lac_3d(data_array):
+
+def transform_to_lac_3d(data_array, tb=TUBE_POTENTIAL.TB13000EV):
     for i in range(0, data_array.shape[0]):
         for j in range(0, data_array.shape[1]):
             for k in range(0, data_array.shape[2]):
-                data_array[i,j,k] = attenuation_lookup(data_array[i,j,k], TUBE_POTENTIAL.TB13000EV)
+                data_array[i,j,k] = attenuation_lookup(data_array[i,j,k], tb)
     return data_array
 
-def transform_to_lac_sequential(data_array):
-    for i in range(0, len(data_array)):
+
+def transform_to_lac_sequential(data_array, start, end, tb=TUBE_POTENTIAL.TB13000EV):
+    for i in range(start, end):
         data_array[i] = attenuation_lookup(data_array[i], TUBE_POTENTIAL.TB13000EV)
     return data_array
 
-def transform_to_lac_multiproc(data_array):
+
+def transform_to_lac_multiproc(data_array, tb=TUBE_POTENTIAL.TB13000EV, num_cores=multiprocessing.cpu_count()):
     datashape = data_array.shape
-    #data = data_array.ravel()
-    data = data_array.flatten()
-    cores = multiprocessing.cpu_count()
+    shared_data = multiprocessing.Array(ctypes.c_float, data_array.size, lock=False)
+    temp = np.frombuffer(shared_data, dtype=data_array.dtype)
+    temp[:] = data_array.flatten(order='C')
+
     procs = []
-    for i in range(0, cores):
-        r = [int(i * len(data)/cores), min(int((i+1) * len(data)/cores), len(data))]
-        p = multiprocessing.Process(target=transform_to_lac_sequential, args=[data[r[0]:r[1]]])
+    for i in range(0, num_cores):
+        start = int(i * len(shared_data)/num_cores)
+        end   = min(int((i+1) * len(shared_data)/num_cores), len(shared_data))
+        p = multiprocessing.Process(target=transform_to_lac_sequential, args=[shared_data,start,end,tb])
         procs.append(p)
         p.start()
 
     for p in procs:
         p.join()
 
-    return data.reshape(datashape)
+    result = np.ctypeslib.as_array(shared_data)
+    return result.reshape(datashape)
+
 
 if __name__ == '__main__':
-    print("Testing attenuation_lookup")
-    densities = [0, 1, 21, 2516]
+    densities = np.asarray([0, 1, 21, 2516]).astype(np.float32)
     expected = [0, 0.000289/21, 0.000289, 2.484]
     result = []
+
+    print("Testing attenuation_lookup")
     for d in densities:
         result.append(attenuation_lookup(d))
     print("expected:\n", expected)
-    print("result:\n", result)
-    print("Testing lac transform...")
-    result = transform_to_lac_sequential(densities)
+    print("result:\n", np.asarray(result).astype(np.float32))
+
+    print("\n\nTesting sequential lac transform...")
+    densities2 = np.copy(densities)
+    result = transform_to_lac_sequential(densities2,0,densities2.size)
     print("expected:\n", expected)
     print("result:\n", result)
+    print("densities2:\n", densities2)
+
+    print("\n\nTesting parallel lac transform...")
+    densities3 = np.copy(densities)
+    result = transform_to_lac_multiproc(densities3, num_cores=2)
+    print("expected:\n", expected)
+    print("result:\n", result)
+    print("densities3:\n", densities3)
 
