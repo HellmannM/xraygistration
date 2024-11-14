@@ -21,11 +21,9 @@ img = nib.load(inputfile)
 data = img.get_fdata()
 print("Shape: ", data.shape)
 data = data.astype(np.float32)
-data = np.asarray(data)
 
 print("Transform to LAC...")
 data_lac = transform_to_lac_multiproc(data).astype(np.float32)
-data_lac = np.ascontiguousarray(data_lac)
 
 print("Render...")
 # ANARI
@@ -57,9 +55,9 @@ anariCommitParameters(device, device)
 # Camera ------------
 width = 500
 height = 384
-cam_pos = [0.0, 0.0, 1670.0]
+cam_pos = [255.5, 609.667, -770.566]
 cam_up = [0.0, 1.0, 0.0]
-cam_dir = [0.0, 0.0, -1.0]
+cam_dir = [0.0, -0.34202, 0.939693]
 cam_fov_x_rad = 0.31535198085001725
 cam_fov_y_rad = 0.24426769480863722
 camera = anariNewCamera(device, 'perspective')

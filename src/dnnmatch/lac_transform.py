@@ -92,14 +92,6 @@ def attenuation_lookup(density, tb=TUBE_POTENTIAL.TB13000EV):
            )
 
 
-def transform_to_lac_3d(data_array, tb=TUBE_POTENTIAL.TB13000EV):
-    for i in range(0, data_array.shape[0]):
-        for j in range(0, data_array.shape[1]):
-            for k in range(0, data_array.shape[2]):
-                data_array[i,j,k] = attenuation_lookup(data_array[i,j,k], tb)
-    return data_array
-
-
 def transform_to_lac_sequential(data_array, start, end, tb=TUBE_POTENTIAL.TB13000EV):
     for i in range(start, end):
         data_array[i] = attenuation_lookup(data_array[i], TUBE_POTENTIAL.TB13000EV)
@@ -110,7 +102,7 @@ def transform_to_lac_multiproc(data_array, tb=TUBE_POTENTIAL.TB13000EV, num_core
     datashape = data_array.shape
     shared_data = multiprocessing.Array(ctypes.c_float, data_array.size, lock=False)
     temp = np.frombuffer(shared_data, dtype=data_array.dtype)
-    temp[:] = data_array.flatten(order='C')
+    temp[:] = data_array.ravel(order='F') #nibabel reads data in fortran style
 
     procs = []
     for i in range(0, num_cores):
@@ -127,6 +119,7 @@ def transform_to_lac_multiproc(data_array, tb=TUBE_POTENTIAL.TB13000EV, num_core
     return result.reshape(datashape)
 
 
+# main() will test some hard-coded values
 if __name__ == '__main__':
     densities = np.asarray([0, 1, 21, 2516]).astype(np.float32)
     expected = [0, 0.000289/21, 0.000289, 2.484]
