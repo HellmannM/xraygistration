@@ -22,3 +22,6 @@
 	path = src/anari-visionaray
 	url = git@github.com/HellmannM/anari-visionaray
 	branch = drr
+[submodule "testfiles"]
+	path = testfiles
+	url = git@github.com:HellmannM/xraygistration-testfiles.git
