@@ -2,14 +2,23 @@
 	path = 3rdparty/visionaray
     url = git@github.com:HellmannM/visionaray.git
     branch = match
-
 [submodule "3rdparty/nlohmann_json"]
 	path = 3rdparty/nlohmann_json
-	url = git@github.com:nlohmann/json.git
-
+	url = https://github.com:nlohmann/json.git
 [submodule "3rdparty/CmdLine"]
 	path = 3rdparty/CmdLine
 	url = https://github.com/abolz/CmdLine.git
 [submodule "3rdparty/ITK"]
 	path = 3rdparty/ITK
 	url = https://github.com/InsightSoftwareConsortium/ITK
+[submodule "src/dnn-registration"]
+	path = src/dnn-registration
+	url = git@github.com/HellmannM/dnn-registration
+[submodule "src/anari-drr-viewer"]
+	path = src/anari-drr-viewer
+	url = git@github.com/HellmannM/anari-drr-viewer
+	branch = drr
+[submodule "src/anari-visionaray"]
+	path = src/anari-visionaray
+	url = git@github.com/HellmannM/anari-visionaray
+	branch = drr
