@@ -1,5 +1,14 @@
-# This file is distributed under the MIT license.
-# See the LICENSE file for details.
+cmake_minimum_required(VERSION 3.25.2)
+
+project(match)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+
 
 #--------------------------------------------------------------------------------------------------
 # External libraries
@@ -25,6 +34,7 @@ visionaray_use_package(OpenCV)
 # CUDA
 if (VSNRAY_ENABLE_CUDA)
     find_package(CUDA)
+    set(CUDA_ARCHITECTURES "native")
     visionaray_use_package(CUDA)
 endif()
 

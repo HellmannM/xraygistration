@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.25.2)
 
-project(ct-rg-matcher)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 20)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+project(xraygistration)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
@@ -75,4 +70,6 @@ option(VSNRAY_ENABLE_TBB "Use TBB, if available" ON)
 
 add_subdirectory(match)
 add_subdirectory(chess)
+add_subdirectory(anari-drr-viewer)
+add_subdirectory(anari-visionaray)
 
