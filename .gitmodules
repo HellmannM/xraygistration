@@ -12,14 +12,14 @@
 	path = 3rdparty/ITK
 	url = https://github.com/InsightSoftwareConsortium/ITK.git
 [submodule "src/dnn-registration"]
-	path = dnn-registration
+	path = src/dnn-registration
 	url = git@github.com:HellmannM/dnn-registration.git
 [submodule "src/anari-drr-viewer"]
-	path = anari-drr-viewer
+	path = src/anari-drr-viewer
 	url = git@github.com:HellmannM/anari-drr-viewer.git
 	branch = drr
 [submodule "src/anari-visionaray"]
-	path = anari-visionaray
+	path = src/anari-visionaray
 	url = git@github.com:HellmannM/anari-visionaray.git
 	branch = drr
 [submodule "testfiles"]
