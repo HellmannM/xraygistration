@@ -73,5 +73,6 @@ set(__VSNRAY_COMMON_CONFIG_DIR "${__VSNRAY_CONFIG_DIR}/common")
 option(VSNRAY_ENABLE_CUDA "Use CUDA, if available" ON)
 option(VSNRAY_ENABLE_TBB "Use TBB, if available" ON)
 
-add_subdirectory(src)
+add_subdirectory(match)
+add_subdirectory(chess)
 
