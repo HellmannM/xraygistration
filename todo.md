@@ -1,6 +1,14 @@
 # CMake
 - [ ] Fix sources (headers)
 
+# anari-drr-viewer
+- [ ] Export JSON
+- [ ] Pass depth estimation through
+- [ ] Pixel selection
+- [ ] Match code
+- [ ] Possibility to set camera
+- [ ] Load (and display?) xray files
+
 # Match
 ### Matcher:
 - [ ] Check License for SURF
