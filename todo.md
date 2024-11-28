@@ -9,6 +9,7 @@
 - [ ] Possibility to set camera
 - [ ] Switch LAC LUT at runtime
 - [ ] Find light-weight nifti and dicom loader
+- [ ] Fix loading/displaying PNGs with other pixel format than RGBA8
 
 # Match
 ### Matcher:
