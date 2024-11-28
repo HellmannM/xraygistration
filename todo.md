@@ -7,7 +7,8 @@
 - [ ] Pixel selection
 - [ ] Match code
 - [ ] Possibility to set camera
-- [ ] Load (and display?) xray files
+- [ ] Switch LAC LUT at runtime
+- [ ] Find light-weight nifti and dicom loader
 
 # Match
 ### Matcher:
@@ -16,15 +17,11 @@
 - [ ] Move renderer to own header
 - [x] Better depth estimation / back projection
       maybe copy from "A CNN Regression Approach for Real-Time 2D 3D Registration"
-- [x] use LAC LUTs for reprojection/depth estimation
 ### Renderer:
 - [ ] Simulate emitter surface area (instead of pinhole cam)
 - [ ] add routine to tune brightness & contrast to match input image
 - [ ] respect voxel dims
-- [x] calc traveled distance
-- [x] variable tube potential
 - [ ] add scatter mask + noise
-- [x] use different nifti loader? maybe ITK
 ### Search:
 - [x] current approach:
     * generate image with current cam
@@ -38,6 +35,3 @@
     * update camera
     * loop
 
-
-# DNNMATCH
-- [x] research normalized flow / flow matching
