@@ -14,6 +14,7 @@
 [submodule "src/dnn-registration"]
 	path = dnn-registration
 	url = git@github.com:HellmannM/dnn-registration.git
+    branch = main
 [submodule "src/anari-drr-viewer"]
 	path = anari-drr-viewer
 	url = git@github.com:HellmannM/anari-drr-viewer.git
@@ -25,3 +26,4 @@
 [submodule "testfiles"]
 	path = testfiles
 	url = git@github.com:HellmannM/xraygistration-testfiles.git
+    branch = main
