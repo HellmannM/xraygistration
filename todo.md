@@ -3,13 +3,22 @@
 
 # anari-drr-viewer
 - [ ] Export JSON
-- [ ] Pass depth estimation through
+- [x] Pass depth estimation through
 - [ ] Pixel selection
 - [ ] Match code
-- [ ] Possibility to set camera
-- [ ] Switch LAC LUT at runtime
+- [.] Possibility to set camera
+- [.] Switch LAC LUT at runtime
+- [x] Load LAC LUT from file
 - [ ] Find light-weight nifti and dicom loader
 - [ ] Fix loading/displaying PNGs with other pixel format than RGBA8
+- [x] Make renderer single-shot
+- [ ] Use multiple samples per pixel or force center of pixel (compare with visRtx single-shot commit)
+- [ ] Adapt viewport size to xray size?
+- [ ] Make visionaray and nlohmann json mandatory
+- [ ] Fix rendering bug in drr-viewer: last row is on top
+
+# anari-visionaray
+- [ ] Add DICOM image loader
 
 # Match
 ### Matcher:
