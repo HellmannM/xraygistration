@@ -72,4 +72,5 @@ add_subdirectory(match)
 add_subdirectory(chess)
 add_subdirectory(anari-drr-viewer)
 add_subdirectory(anari-visionaray)
+add_subdirectory(feature-matcher)
 

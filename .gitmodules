@@ -27,3 +27,7 @@
 	path = testfiles
 	url = git@github.com:HellmannM/xraygistration-testfiles.git
     branch = main
+[submodule "feature-matcher"]
+	path = feature-matcher
+	url = git@github.com:HellmannM/feature-matcher.git
+	branch = main
