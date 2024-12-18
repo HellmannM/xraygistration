@@ -18,11 +18,11 @@
 [submodule "src/anari-drr-viewer"]
 	path = anari-drr-viewer
 	url = git@github.com:HellmannM/anari-drr-viewer.git
-	branch = drr
+	branch = main
 [submodule "src/anari-visionaray"]
 	path = anari-visionaray
 	url = git@github.com:HellmannM/anari-visionaray.git
-	branch = drr
+	branch = main
 [submodule "testfiles"]
 	path = testfiles
 	url = git@github.com:HellmannM/xraygistration-testfiles.git
