@@ -10,10 +10,12 @@ NUM_CORES=24
 
 # 3rdparty/visionaray
 if [ $BUILD_VSNRAY == "1" ]; then
+    INSTALL_DIR="$PWD/3rdparty/visionaray/install"
     pushd 3rdparty/visionaray
     mkdir build
     cd build
     cmake .. \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
         -DCMAKE_POLICY_DEFAULT_CMP0072=NEW \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
@@ -25,6 +27,7 @@ if [ $BUILD_VSNRAY == "1" ]; then
         -DVSNRAY_ENABLE_PTEX=OFF
     make clean
     make -j$NUM_CORES
+    make install -j$NUM_CORES
     popd 
 fi
 

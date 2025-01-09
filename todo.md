@@ -4,12 +4,13 @@
 # anari-drr-viewer
 - [ ] Export JSON
 - [ ] Pixel selection
-- [ ] Match code
+- [x] Match code
 - [ ] Find light-weight nifti and dicom loader
 - [ ] Fix loading/displaying PNGs with other pixel format than RGBA8
 - [ ] Use multiple samples per pixel or force center of pixel (compare with visRtx single-shot commit)
 - [ ] Make visionaray and nlohmann json mandatory
 - [ ] Fix rendering bug in drr-viewer: last row is on top
+- [ ] Load FOV from JSON and adjust viewport
 
 # anari-visionaray
 - [ ] Add DICOM image loader
