@@ -7,8 +7,8 @@
 #define VSNRAY_VIEWER_RENDER_H 1
 
 #include <common/config.h>
+#include <common/cpu_buffer_rt.h>
 
-#include <visionaray/cpu_buffer_rt.h>
 #include <visionaray/math/simd/simd.h>
 #include <visionaray/math/forward.h>
 #include <visionaray/math/math.h>

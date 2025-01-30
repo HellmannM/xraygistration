@@ -27,13 +27,13 @@
 
 // Visionaray includes
 #undef MATH_NAMESPACE
-#include <visionaray/cpu_buffer_rt.h>
 #include <visionaray/detail/platform.h>
 #include <visionaray/math/math.h>
 #include <visionaray/texture/texture.h>
 #include <visionaray/pinhole_camera.h>
 #include <visionaray/scheduler.h>
 
+#include <common/cpu_buffer_rt.h>
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
@@ -52,7 +52,7 @@ using viewer_type   = viewer_glut;
 struct renderer : viewer_type
 {
     renderer()
-        : viewer_type(500, 384, "Chess")
+        : viewer_type(1353, 1158, "Chess")
         , bbox({ -40.0f, -40.0f, 0.0f }, { 40.0f, 40.0f, -0.0001f })
         , host_sched(8)
     {
@@ -68,6 +68,7 @@ struct renderer : viewer_type
 
     void screenshot();
     void calibrate();
+    void reset();
 
 protected:
 
@@ -128,6 +129,9 @@ void renderer::on_key_press(key_event const& event)
         break;
     case 'c':
         calibrate();
+        break;
+    case 'r':
+        reset();
         break;
     }
     #pragma GCC diagnostic pop
@@ -220,6 +224,22 @@ void renderer::calibrate()
     );
     std::cout << "cameraMatrix=\n" << cameraMatrix << "\n";
     std::cout << "distCoeffs=\n" << distCoeffs << "\n";
+    std::cout << "width=" << width() << "\n";
+    std::cout << "height=" << height() << "\n";
+    const auto aspect = width() / static_cast<float>(height());
+    std::cout << "aspect=" << aspect << "\n";
+    const auto fovx = 2.0 * std::atan(std::tan(cam.fovy() / 2.0) * aspect);
+    const auto fovy = cam.fovy();
+    std::cout << "fovx=" << fovx << "\n";
+    std::cout << "fovy=" << fovy << "\n";
+    std::cout << "fx=" << 0.5 * ((double)width()) / std::tan(0.5 * fovx) << "\n";
+    std::cout << "fy=" << 0.5 * ((double)height()) / std::tan(0.5 * fovy) << "\n";
+    std::cout << "for opencv: fx=fy=" << 0.5 * ((double)height()) / std::tan(0.5 * fovy) / aspect << "\n";
+}
+
+void renderer::reset()
+{
+    saved_frames.clear();
 }
 
 //-------------------------------------------------------------------------------------------------

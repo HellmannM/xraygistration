@@ -34,4 +34,5 @@ endif()
 add_subdirectory(anari-drr-viewer)
 add_subdirectory(anari-visionaray)
 add_subdirectory(feature-matcher)
+add_subdirectory(chess)
 
