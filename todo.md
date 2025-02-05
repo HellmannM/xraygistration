@@ -1,18 +1,13 @@
-# CMake
-- [ ] Fix sources (headers)
-
 # anari-drr-viewer
 - [ ] Export JSON
 - [ ] Pixel selection & calc code
 - [ ] Find light-weight nifti and dicom loader
-- [ ] Fix loading/displaying PNGs with other pixel format than RGBA8
 - [ ] Use multiple samples per pixel or force center of pixel (compare with visRtx single-shot commit)
 - [ ] auto-adjust brightness?
-- [ ] update load camera after matching or add new button
+- [ ] fix memory leak on DRRViewport resize
 
 # anari-visionaray
 - [ ] Add DICOM image loader
-- [ ] Fix bug when replacing volume (switch LAC LUT at runtime)
 - [ ] add scatter mask + noise
 - [ ] simulate emitter surface instead of pinhole cam? multiple samples with jittered origin?
 
