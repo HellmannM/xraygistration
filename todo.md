@@ -4,7 +4,6 @@
 - [ ] Find light-weight nifti and dicom loader
 - [ ] Use multiple samples per pixel or force center of pixel (compare with visRtx single-shot commit)
 - [ ] auto-adjust brightness?
-- [ ] fix memory leak on DRRViewport resize
 
 # anari-visionaray
 - [ ] Add DICOM image loader
