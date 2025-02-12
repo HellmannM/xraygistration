@@ -7,8 +7,8 @@
 
 # anari-visionaray
 - [ ] Add DICOM image loader
-- [ ] add scatter mask + noise
-- [ ] simulate emitter surface instead of pinhole cam? multiple samples with jittered origin?
+- [~] fix memory leak when re-comitting renderer (calls commit on field)
+- [ ] fix photon energy vs tube potential
 
 # feature-matcher
 - [ ] match many images at once, filter closest images, update cam with average of remaining results?
