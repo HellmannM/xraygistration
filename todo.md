@@ -8,7 +8,7 @@
 # anari-visionaray
 - [ ] Add DICOM image loader
 - [~] fix memory leak when re-comitting renderer (calls commit on field)
-- [ ] fix photon energy vs tube potential
+- [~] scatter: is simply subtracting enough?
 
 # feature-matcher
 - [ ] match many images at once, filter closest images, update cam with average of remaining results?

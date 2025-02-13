@@ -1,5 +1,9 @@
+# dicomreader.py
 
+import argparse
 import numpy as np
+import os.path
+import png
 import pydicom
 import sys
 
@@ -42,37 +46,41 @@ class dicom_data:
             + "FOV X:" + str(self.fov_x_deg)         + "°\n"   \
             + "FOV Y:" + str(self.fov_y_deg)         + "°\n"
 
-def read_dicom(dicom_path):
-    ds = pydicom.dcmread(dicom_path)
-    #print(ds)
-    
-    dist_source_detector        = ds[0x0018, 0x1110]
-    dist_source_patient         = ds[0x0018, 0x1111]
-    dist_source_entrance        = ds[0x0040, 0x0306]
-    imager_pixel_spacing        = ds[0x0018, 0x1164]
-    positioner_primary_angle    = ds[0x0018, 0x1510]
-    positioner_secondary_angle  = ds[0x0018, 0x1511]
-    rows                        = ds[0x0028, 0x0010]
-    columns                     = ds[0x0028, 0x0011]
-    left_edge                   = ds[0x0018, 0x1602]
-    right_edge                  = ds[0x0018, 0x1604]
-    upper_edge                  = ds[0x0018, 0x1606]
-    lower_edge                  = ds[0x0018, 0x1608]
-    
-    sensor_width_mm = columns.value * imager_pixel_spacing.value[1] #TODO at 0 or 1?
-    sensor_height_mm = rows.value * imager_pixel_spacing.value[0] #TODO at 0 or 1?
-    image_width = right_edge.value - left_edge.value + 1
-    image_height = lower_edge.value - upper_edge.value + 1
-    image_width_mm = image_width * imager_pixel_spacing.value[1] #TODO at 0 or 1?
-    image_height_mm = image_height * imager_pixel_spacing.value[0] #TODO at 0 or 1?
-    fov_x = 2 * np.arctan(image_width_mm  / 2 / dist_source_detector.value)
-    fov_y = 2 * np.arctan(image_height_mm / 2 / dist_source_detector.value)
+def read_entry(ds, group, element, default_value=0):
+    try:
+        return ds[group, element].value
+    except:
+        print(f'Error: could not find [{group:#06X}, {element:#06X}]')
+        return default_value
+
+def read_header(ds):
+    dist_source_detector        = read_entry(ds, 0x0018, 0x1110, 1)
+#    dist_source_patient         = read_entry(ds, 0x0018, 0x1111)
+#    dist_source_entrance        = read_entry(ds, 0x0040, 0x0306)
+    imager_pixel_spacing        = read_entry(ds, 0x0018, 0x1164, 1)
+#    positioner_primary_angle    = read_entry(ds, 0x0018, 0x1510)
+#    positioner_secondary_angle  = read_entry(ds, 0x0018, 0x1511)
+    rows                        = read_entry(ds, 0x0028, 0x0010, 1)
+    columns                     = read_entry(ds, 0x0028, 0x0011, 1)
+    left_edge                   = read_entry(ds, 0x0018, 0x1602, 0)
+    right_edge                  = read_entry(ds, 0x0018, 0x1604, 1)
+    upper_edge                  = read_entry(ds, 0x0018, 0x1606, 0)
+    lower_edge                  = read_entry(ds, 0x0018, 0x1608, 1)
+
+    sensor_width_mm = columns * imager_pixel_spacing[1] #TODO at 0 or 1?
+    sensor_height_mm = rows * imager_pixel_spacing[0] #TODO at 0 or 1?
+    image_width = right_edge - left_edge + 1
+    image_height = lower_edge - upper_edge + 1
+    image_width_mm = image_width * imager_pixel_spacing[1] #TODO at 0 or 1?
+    image_height_mm = image_height * imager_pixel_spacing[0] #TODO at 0 or 1?
+    fov_x = 2 * np.arctan(image_width_mm  / 2 / dist_source_detector)
+    fov_y = 2 * np.arctan(image_height_mm / 2 / dist_source_detector)
     fov_x_deg = fov_x / ( 2 * np.pi ) * 360
     fov_y_deg = fov_y / ( 2 * np.pi ) * 360
 
     dd = dicom_data(
-        sensor_width_px  = columns.value,
-        sensor_height_px = rows.value,
+        sensor_width_px  = columns,
+        sensor_height_px = rows,
         sensor_width_mm  = sensor_width_mm,
         sensor_height_mm = sensor_height_mm,
         image_width_px   = image_width,
@@ -100,14 +108,46 @@ def read_dicom(dicom_path):
 
     return dd
 
+def export_as_png(ds, export_path, max_value=4095):
+    bits_stored = read_entry(ds, 0x0028, 0x0101, 12)
+    max_value = pow(2, bits_stored)
+
+    image_2d = ds.pixel_array.astype(float)
+    image_2d = (np.maximum(image_2d,0) / max_value) * 255.0
+    image_2d = np.uint8(image_2d)
+
+    writer = png.Writer(image_2d.shape[1], image_2d.shape[0], greyscale=True)
+    writer.write(export_path, image_2d)
+    print(f'PNG exported to: "{export_path.name}"\n')
+    return
+
 def main() -> int:
-    # use test file if no path is provided
-    dicom_path = "../../testfiles/Bohr_Bruno_dicom/Abdomen - R202108130920122/Abdomen_Einzelaufnahme_1/IM-0001-0001.dcm"
-    if len(sys.argv) > 1:
-        dicom_path = sys.argv[1]
-    print("Reading file: ", dicom_path)
-    dd = read_dicom(dicom_path)
+    parser = argparse.ArgumentParser(description='Extract info from DICOM header and optionally export as PNG.')
+    parser.add_argument('dicom', type=str, help='Path to DICOM file.')
+    parser.add_argument('--png', type=str, help='Export as PNG (path to file).')
+    parser.add_argument('--force', action=argparse.BooleanOptionalAction, default=False, help='Force export (overwrite files if necessary).')
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.dicom):
+        raise Exception('File not found: "%s"' % args.dicom)
+    dicom_file = open(args.dicom, 'rb')
+    ds = pydicom.dcmread(dicom_file)
+    dicom_file.close()
+
+    # read header
+    dd = read_header(ds)
     print(dd)
+
+    # export as png
+    if args.png is not None:
+        if os.path.isfile(args.png):
+            if not args.force:
+                raise Exception('File exists and would be overwritten: "%s"' % args.png)
+            os.remove(args.png)
+        png_file = open(args.png, 'wb')
+        export_as_png(ds, png_file)
+        png_file.close()
+
     return 0
 
 if __name__ == "__main__":
