@@ -1,5 +1,4 @@
 # anari-drr-viewer
-- [ ] Export JSON
 - [ ] Pixel selection & calc code
 - [ ] Find light-weight nifti and dicom loader
 - [ ] Use multiple samples per pixel or force center of pixel (compare with visRtx single-shot commit)
