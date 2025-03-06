@@ -16,7 +16,7 @@ set(IMGUI_DIR "${VISIONARAY_DIR}/src/3rdparty/imgui" CACHE PATH "Path to ImGUI."
 set(ITK_DIR "${3RDPARTY_DIR}/ITK/install/lib/cmake/ITK-6.0/" CACHE PATH "Path to ITK cmake module.")
 set(NLOHMANN_JSON_DIR "${3RDPARTY_DIR}/nlohmann_json" CACHE PATH "Path to nlohmann json dir.")
 set(NLOHMANN_JSON_INCLUDE_DIR "${NLOHMANN_JSON_DIR}/include" CACHE PATH "Path to nlohmann json include dir.")
-set(IMAGE_TRANSFORM_ESTIMATOR_INCLUDE_DIR "../feature-matcher" CACHE PATH "Path to Image Transform Estimator include files.")
+set(IMAGE_TRANSFORM_ESTIMATOR_INCLUDE_DIR "../image-transform-estimator" CACHE PATH "Path to Image Transform Estimator include files.")
 
 #--------------------------------------------------------------------------------------------------
 # CMake policies to control backward compatible behavior
@@ -34,6 +34,6 @@ endif()
 
 add_subdirectory(anari-drr-viewer)
 add_subdirectory(anari-visionaray)
-add_subdirectory(feature-matcher)
+add_subdirectory(image-transform-estimator)
 add_subdirectory(chess)
 
